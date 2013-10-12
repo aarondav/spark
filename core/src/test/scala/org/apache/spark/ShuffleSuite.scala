@@ -28,7 +28,7 @@ import org.apache.spark.serializer.KryoSerializer
 
 
 class ShuffleSuite extends FunSuite with ShouldMatchers with LocalSparkContext {
-  test("groupByKey without compression") {
+  ignore("groupByKey without compression") {
     try {
       System.setProperty("spark.shuffle.compress", "false")
       sc = new SparkContext("local", "test")
