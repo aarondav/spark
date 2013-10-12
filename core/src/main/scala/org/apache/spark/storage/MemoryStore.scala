@@ -82,7 +82,6 @@ private class MemoryStore(blockManager: BlockManager, maxMemory: Long)
   }
 
   override def getBytes(blockId: BlockId): Option[ByteBuffer] = {
-    logWarning("GetBlock! " + blockId)
     val entry = entries.synchronized {
       entries.get(blockId)
     }
@@ -132,12 +131,10 @@ private class MemoryStore(blockManager: BlockManager, maxMemory: Long)
   }
 
   /**
-   * Return the RDD ID that a given block ID is from, or null if it is not an RDD block.
+   * Return the RDD ID that a given block ID is from, or None if it is not an RDD block.
    */
   private def getRddId(blockId: BlockId): Option[Int] = {
     blockId.asRDDId.map(_.rddId)
-//    x.getOrElse(null.asInstanceOf[Integer])
-//    blockId.asRDDId.map(_.rddId).getOrElse(null)
   }
 
   /**
@@ -252,7 +249,6 @@ private class MemoryStore(blockManager: BlockManager, maxMemory: Long)
   }
 
   override def contains(blockId: BlockId): Boolean = {
-    logWarning("Contains block? " + blockId)
     entries.synchronized { entries.containsKey(blockId) }
   }
 }

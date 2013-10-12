@@ -62,7 +62,7 @@ private[storage] object BlockManagerMessages {
 
     override def writeExternal(out: ObjectOutput) {
       blockManagerId.writeExternal(out)
-      BlockId.writeExternal(out, blockId)
+      out.writeUTF(blockId.filename)
       storageLevel.writeExternal(out)
       out.writeLong(memSize)
       out.writeLong(diskSize)
@@ -70,7 +70,7 @@ private[storage] object BlockManagerMessages {
 
     override def readExternal(in: ObjectInput) {
       blockManagerId = BlockManagerId(in)
-      blockId = BlockId.readExternal(in)
+      blockId = BlockId.fromString(in.readUTF())
       storageLevel = StorageLevel(in)
       memSize = in.readLong()
       diskSize = in.readLong()

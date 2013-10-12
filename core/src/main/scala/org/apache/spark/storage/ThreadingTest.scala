@@ -32,8 +32,6 @@ import org.apache.spark.serializer.KryoSerializer
  */
 private[spark] object ThreadingTest {
 
-  case class TestBlockId(filename: String) extends BlockId
-
   val numProducers = 5
   val numBlocksPerProducer = 20000
 

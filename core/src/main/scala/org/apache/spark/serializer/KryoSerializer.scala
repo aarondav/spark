@@ -26,12 +26,8 @@ import com.esotericsoftware.kryo.io.{Input => KryoInput, Output => KryoOutput}
 import com.twitter.chill.{EmptyScalaKryoInstantiator, AllScalaRegistrar}
 
 import org.apache.spark.{SerializableWritable, Logging}
-import org.apache.spark.storage._
-
 import org.apache.spark.broadcast.HttpBroadcast
-import org.apache.spark.storage.PutBlock
-import org.apache.spark.storage.GetBlock
-import org.apache.spark.storage.GotBlock
+import org.apache.spark.storage.{GetBlock,GotBlock, PutBlock, StorageLevel, TestBlockId}
 
 /**
  * A Spark serializer that uses the [[http://code.google.com/p/kryo/wiki/V1Documentation Kryo 1.x library]].
@@ -46,7 +42,7 @@ class KryoSerializer extends org.apache.spark.serializer.Serializer with Logging
     val kryo = instantiator.newKryo()
     val classLoader = Thread.currentThread.getContextClassLoader
 
-    val blockId = RDDBlockId(0, 0)
+    val blockId = TestBlockId("1")
     // Register some commonly used classes
     val toRegister: Seq[AnyRef] = Seq(
       ByteBuffer.allocate(1),

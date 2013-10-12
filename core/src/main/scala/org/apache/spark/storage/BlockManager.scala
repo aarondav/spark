@@ -17,7 +17,7 @@
 
 package org.apache.spark.storage
 
-import java.io._
+import java.io.{InputStream, OutputStream}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 
 import scala.collection.mutable.{HashMap, ArrayBuffer, HashSet}
@@ -36,9 +36,6 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.util._
 
 import sun.nio.ch.DirectBuffer
-import scala.Left
-import scala.Some
-import scala.Right
 
 private[spark] class BlockManager(
     executorId: String,
@@ -322,7 +319,6 @@ private[spark] class BlockManager(
    */
   def getLocal(blockId: BlockId): Option[Iterator[Any]] = {
     logDebug("Getting local block " + blockId)
-
     val info = blockInfo.get(blockId).orNull
     if (info != null) {
       info.synchronized {
@@ -408,7 +404,7 @@ private[spark] class BlockManager(
 
     // As an optimization for map output fetches, if the block is for a shuffle, return it
     // without acquiring a lock; the disk store never deletes (recent) items so this should work
-    if (blockId.isInstanceOf[ShuffleBlockId]) {
+    if (blockId.isShuffle) {
       return diskStore.getBytes(blockId) match {
         case Some(bytes) =>
           Some(bytes)
@@ -894,7 +890,7 @@ private[spark] class BlockManager(
     // TODO: Instead of doing a linear scan on the blockInfo map, create another map that maps
     // from RDD.id to blocks.
     logInfo("Removing RDD " + rddId)
-    val blocksToRemove = blockInfo.filter(_._1.isInstanceOf[RDDBlockId]).map(_._1)
+    val blocksToRemove = blockInfo.keys.flatMap(_.asRDDId).filter(_.rddId == rddId)
     blocksToRemove.foreach(blockId => removeBlock(blockId, tellMaster = false))
     blocksToRemove.size
   }

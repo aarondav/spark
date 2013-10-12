@@ -20,8 +20,8 @@ package org.apache.spark.network.netty;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundByteHandlerAdapter;
-import org.apache.spark.storage.BlockId;
 
+import org.apache.spark.storage.BlockId;
 
 abstract class FileClientHandler extends ChannelInboundByteHandlerAdapter {
 

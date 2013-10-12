@@ -20,7 +20,7 @@ package org.apache.spark.network.netty
 import io.netty.buffer._
 
 import org.apache.spark.Logging
-import org.apache.spark.storage.BlockId
+import org.apache.spark.storage.{TestBlockId, BlockId}
 
 private[spark] class FileHeader (
   val fileLen: Int,
@@ -62,10 +62,8 @@ private[spark] object FileHeader {
     new FileHeader(length, blockId)
   }
 
-
   def main (args:Array[String]) {
-    case class MyBlockId() extends BlockId { val filename = "my_block" }
-    val header = new FileHeader(25, MyBlockId())
+    val header = new FileHeader(25, TestBlockId("my_block"))
     val buf = header.buffer
     val newHeader = FileHeader.create(buf)
     System.out.println("id=" + newHeader.blockId + ",size=" + newHeader.fileLen)

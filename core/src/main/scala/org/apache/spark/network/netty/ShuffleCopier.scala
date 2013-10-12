@@ -100,7 +100,7 @@ private[spark] object ShuffleCopier extends Logging {
     }
     val host = args(0)
     val port = args(1).toInt
-    val file = args(2)
+    val blockId = BlockId.fromString(args(2))
     val threads = if (args.length > 3) args(3).toInt else 10
 
     val copiers = Executors.newFixedThreadPool(80)
@@ -108,7 +108,7 @@ private[spark] object ShuffleCopier extends Logging {
       Executors.callable(new Runnable() {
         def run() {
           val copier = new ShuffleCopier()
-          copier.getBlock(host, port, BlockId.fromString(file), echoResultCollectCallBack)
+          copier.getBlock(host, port, blockId, echoResultCollectCallBack)
         }
       })
     }).asJava

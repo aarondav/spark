@@ -69,7 +69,12 @@ private[spark] class BlockMessage() {
     println()
     */
     typ = buffer.getInt()
-    id = BlockId.deserialize(buffer)
+    val idLength = buffer.getInt()
+    val idBuilder = new StringBuilder(idLength)
+    for (i <- 1 to idLength) {
+      idBuilder += buffer.getChar()
+    }
+    id = BlockId.fromString(idBuilder.toString)
     
     if (typ == BlockMessage.TYPE_PUT_BLOCK) {
 
@@ -108,17 +113,13 @@ private[spark] class BlockMessage() {
   def getId: BlockId = id
   def getData: ByteBuffer = data
   def getLevel: StorageLevel =  level
-
-  def serializeInto(byteBuffer: ByteBuffer, data: BlockId) {
-
-  }
   
   def toBufferMessage: BufferMessage = {
     val startTime = System.currentTimeMillis
     val buffers = new ArrayBuffer[ByteBuffer]()
-    var buffer = ByteBuffer.allocate(4 + 4 + id.filename.length() * 2) // TODO: Why x2?
-    buffer.putInt(typ)
-    BlockId.serialize(id, buffer)
+    var buffer = ByteBuffer.allocate(4 + 4 + id.filename.length * 2) // TODO: Why x2?
+    buffer.putInt(typ).putInt(id.filename.length)
+    id.filename.foreach((x: Char) => buffer.putChar(x))
     buffer.flip()
     buffers += buffer
 
@@ -201,7 +202,7 @@ private[spark] object BlockMessage {
   def main(args: Array[String]) {
     val B = new BlockMessage()
     B.set(new PutBlock(
-      new RDDBlockId(1, 2), ByteBuffer.allocate(10), StorageLevel.MEMORY_AND_DISK_SER_2))
+      new TestBlockId("ABC"), ByteBuffer.allocate(10), StorageLevel.MEMORY_AND_DISK_SER_2))
     val bMsg = B.toBufferMessage
     val C = new BlockMessage()
     C.set(bMsg)

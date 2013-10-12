@@ -26,7 +26,6 @@ import io.netty.channel.DefaultFileRegion;
 
 import org.apache.spark.storage.BlockId;
 
-
 class FileServerHandler extends ChannelInboundMessageHandlerAdapter<String> {
 
   PathResolver pResolver;

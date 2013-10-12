@@ -131,7 +131,7 @@ class BlockManagerMasterActor(val isLocal: Boolean) extends Actor with Logging {
 
     // Find all blocks for the given RDD, remove the block from both blockLocations and
     // the blockManagerInfo that is tracking the blocks.
-    val blocks = blockLocations.keySet().filter(_.isRDDWithId(rddId))
+    val blocks = blockLocations.keys.flatMap(_.asRDDId).filter(_.rddId == rddId)
     blocks.foreach { blockId =>
       val bms: mutable.HashSet[BlockManagerId] = blockLocations.get(blockId)
       bms.foreach(bm => blockManagerInfo.get(bm).foreach(_.removeBlock(blockId)))
@@ -292,7 +292,6 @@ class BlockManagerMasterActor(val isLocal: Boolean) extends Actor with Logging {
   }
 
   private def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
-    logError("LOCATIONS: " + blockLocations)
     if (blockLocations.containsKey(blockId)) blockLocations.get(blockId).toSeq else Seq.empty
   }
 

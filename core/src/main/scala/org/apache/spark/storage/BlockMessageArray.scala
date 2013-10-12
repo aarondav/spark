@@ -111,9 +111,7 @@ private[spark] object BlockMessageArray {
   }
   
   def main(args: Array[String]) {
-    case class TestBlockId(filename: String) extends BlockId
-
-    val blockMessages = 
+    val blockMessages =
       (0 until 10).map { i =>
         if (i % 2 == 0) {
           val buffer =  ByteBuffer.allocate(100)

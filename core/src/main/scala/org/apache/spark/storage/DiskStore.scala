@@ -314,7 +314,6 @@ private class DiskStore(blockManager: BlockManager, rootDirs: String)
   }
 
   private[storage] def startShuffleBlockSender(port: Int): Int = {
-    logError("Hello from DiskStore")
     val pResolver = new PathResolver {
       override def getAbsolutePath(blockIdString: String): String = {
         val blockId = BlockId.fromString(blockIdString)

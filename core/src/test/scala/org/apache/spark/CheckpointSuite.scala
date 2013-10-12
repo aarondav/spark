@@ -21,7 +21,7 @@ import org.scalatest.FunSuite
 import java.io.File
 import org.apache.spark.rdd._
 import org.apache.spark.SparkContext._
-import org.apache.spark.storage.{RDDBlockId, BlockId, StorageLevel}
+import org.apache.spark.storage.{BlockId, StorageLevel, TestBlockId}
 import org.apache.spark.util.Utils
 
 class CheckpointSuite extends FunSuite with LocalSparkContext with Logging {
@@ -83,7 +83,7 @@ class CheckpointSuite extends FunSuite with LocalSparkContext with Logging {
   }
 
   test("BlockRDD") {
-    val blockId = RDDBlockId(0, 0)
+    val blockId = TestBlockId("id")
     val blockManager = SparkEnv.get.blockManager
     blockManager.putSingle(blockId, "test", StorageLevel.MEMORY_ONLY)
     val blockRDD = new BlockRDD[String](sc, Array(blockId))

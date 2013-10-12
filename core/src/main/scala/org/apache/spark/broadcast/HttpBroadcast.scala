@@ -27,7 +27,6 @@ import org.apache.spark.{HttpServer, Logging, SparkEnv}
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.storage.{BroadcastBlockId, StorageLevel}
 import org.apache.spark.util.{Utils, MetadataCleaner, TimeStampedHashSet}
-import org.apache.spark.storage.BroadcastBlockId
 
 
 private[spark] class HttpBroadcast[T](@transient var value_ : T, isLocal: Boolean, id: Long)
