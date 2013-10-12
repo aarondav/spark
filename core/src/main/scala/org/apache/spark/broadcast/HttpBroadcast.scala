@@ -26,8 +26,7 @@ import it.unimi.dsi.fastutil.io.FastBufferedOutputStream
 import org.apache.spark.{HttpServer, Logging, SparkEnv}
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.storage.{BroadcastBlockId, StorageLevel}
-import org.apache.spark.util.{Utils, MetadataCleaner, TimeStampedHashSet}
-
+import org.apache.spark.util.{MetadataCleanerType, Utils, MetadataCleaner, TimeStampedHashSet}
 
 private[spark] class HttpBroadcast[T](@transient var value_ : T, isLocal: Boolean, id: Long)
   extends Broadcast[T](id) with Logging with Serializable {
@@ -82,7 +81,7 @@ private object HttpBroadcast extends Logging {
   private var server: HttpServer = null
 
   private val files = new TimeStampedHashSet[String]
-  private val cleaner = new MetadataCleaner("HttpBroadcast", cleanup)
+  private val cleaner = new MetadataCleaner(MetadataCleanerType.HTTP_BROADCAST, cleanup)
 
   private lazy val compressionCodec = CompressionCodec.createCodec()
 

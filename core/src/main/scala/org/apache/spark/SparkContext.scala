@@ -62,7 +62,11 @@ import org.apache.spark.scheduler.local.LocalScheduler
 import org.apache.spark.scheduler.cluster.mesos.{CoarseMesosSchedulerBackend, MesosSchedulerBackend}
 import org.apache.spark.storage.{StorageUtils, BlockManagerSource}
 import org.apache.spark.ui.SparkUI
-import org.apache.spark.util.{ClosureCleaner, Utils, MetadataCleaner, TimeStampedHashMap}
+import org.apache.spark.util._
+import org.apache.spark.scheduler.StageInfo
+import org.apache.spark.storage.RDDInfo
+import org.apache.spark.storage.StorageStatus
+import scala.Some
 import org.apache.spark.scheduler.StageInfo
 import org.apache.spark.storage.RDDInfo
 import org.apache.spark.storage.StorageStatus
@@ -119,7 +123,7 @@ class SparkContext(
 
   // Keeps track of all persisted RDDs
   private[spark] val persistentRdds = new TimeStampedHashMap[Int, RDD[_]]
-  private[spark] val metadataCleaner = new MetadataCleaner("SparkContext", this.cleanup)
+  private[spark] val metadataCleaner = new MetadataCleaner(MetadataCleanerType.SPARK_CONTEXT, this.cleanup)
 
   // Initalize the Spark UI
   private[spark] val ui = new SparkUI(this)
@@ -156,7 +160,7 @@ class SparkContext(
     // Regular expression for simulating a Spark cluster of [N, cores, memory] locally
     val LOCAL_CLUSTER_REGEX = """local-cluster\[\s*([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*]""".r
     // Regular expression for connecting to Spark deploy clusters
-    val SPARK_REGEX = """(spark://.*)""".r
+    val SPARK_REGEX = """spark://(.*)""".r
     //Regular expression for connection to Mesos cluster
     val MESOS_REGEX = """(mesos://.*)""".r
 
@@ -172,7 +176,8 @@ class SparkContext(
 
       case SPARK_REGEX(sparkUrl) =>
         val scheduler = new ClusterScheduler(this)
-        val backend = new SparkDeploySchedulerBackend(scheduler, this, sparkUrl, appName)
+        val masterUrls = sparkUrl.split(",").map("spark://" + _)
+        val backend = new SparkDeploySchedulerBackend(scheduler, this, masterUrls, appName)
         scheduler.initialize(backend)
         scheduler
 
@@ -188,8 +193,8 @@ class SparkContext(
         val scheduler = new ClusterScheduler(this)
         val localCluster = new LocalSparkCluster(
           numSlaves.toInt, coresPerSlave.toInt, memoryPerSlaveInt)
-        val sparkUrl = localCluster.start()
-        val backend = new SparkDeploySchedulerBackend(scheduler, this, sparkUrl, appName)
+        val masterUrls = localCluster.start()
+        val backend = new SparkDeploySchedulerBackend(scheduler, this, masterUrls, appName)
         scheduler.initialize(backend)
         backend.shutdownCallback = (backend: SparkDeploySchedulerBackend) => {
           localCluster.stop()
@@ -671,10 +676,21 @@ class SparkContext(
         key = uri.getScheme match {
           case null | "file" =>
             if (env.hadoop.isYarnMode()) {
-              logWarning("local jar specified as parameter to addJar under Yarn mode")
-              return
+              // In order for this to work on yarn the user must specify the --addjars option to
+              // the client to upload the file into the distributed cache to make it show up in the
+              // current working directory.
+              val fileName = new Path(uri.getPath).getName()
+              try {
+                env.httpFileServer.addJar(new File(fileName))
+              } catch {
+                case e: Exception => {
+                  logError("Error adding jar (" + e + "), was the --addJars option used?")
+                  throw e
+                }
+              }
+            } else {
+              env.httpFileServer.addJar(new File(uri.getPath))
             }
-            env.httpFileServer.addJar(new File(uri.getPath))
           case _ =>
             path
         }

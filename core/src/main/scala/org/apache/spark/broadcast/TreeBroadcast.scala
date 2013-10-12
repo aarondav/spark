@@ -19,10 +19,8 @@ package org.apache.spark.broadcast
 
 import java.io._
 import java.net._
-import java.util.{Comparator, Random, UUID}
 
-import scala.collection.mutable.{ListBuffer, Map, Set}
-import scala.math
+import scala.collection.mutable.{ListBuffer, Set}
 
 import org.apache.spark._
 import org.apache.spark.storage.{BroadcastBlockId, StorageLevel}

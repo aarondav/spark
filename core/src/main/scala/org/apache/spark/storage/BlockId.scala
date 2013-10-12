@@ -32,6 +32,7 @@ private[spark] abstract class BlockId {
   def asRDDId = if (isRDD) Some(asInstanceOf[RDDBlockId]) else None
   def isRDD = isInstanceOf[RDDBlockId]
   def isShuffle = isInstanceOf[ShuffleBlockId]
+  def isBroadcast = isInstanceOf[BroadcastBlockId]
 
   override def toString = filename
   override def hashCode = filename.hashCode

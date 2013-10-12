@@ -153,7 +153,8 @@ private[spark] class BlockManager(
 
   var heartBeatTask: Cancellable = null
 
-  val metadataCleaner = new MetadataCleaner("BlockManager", this.dropOldBlocks)
+  private val metadataCleaner = new MetadataCleaner(MetadataCleanerType.BLOCK_MANAGER, this.dropOldNonBroadcastBlocks)
+  private val broadcastCleaner = new MetadataCleaner(MetadataCleanerType.BROADCAST_VARS, this.dropOldBroadcastBlocks)
   initialize()
 
   // The compression codec to use. Note that the "lazy" val is necessary because we want to delay
@@ -919,13 +920,36 @@ private[spark] class BlockManager(
     }
   }
 
-  def dropOldBlocks(cleanupTime: Long) {
-    logInfo("Dropping blocks older than " + cleanupTime)
+  private def dropOldNonBroadcastBlocks(cleanupTime: Long) {
+    logInfo("Dropping non broadcast blocks older than " + cleanupTime)
     val iterator = blockInfo.internalMap.entrySet().iterator()
     while (iterator.hasNext) {
       val entry = iterator.next()
       val (id, info, time) = (entry.getKey, entry.getValue._1, entry.getValue._2)
-      if (time < cleanupTime) {
+      if (time < cleanupTime && !id.isBroadcast) {
+        info.synchronized {
+          val level = info.level
+          if (level.useMemory) {
+            memoryStore.remove(id)
+          }
+          if (level.useDisk) {
+            diskStore.remove(id)
+          }
+          iterator.remove()
+          logInfo("Dropped block " + id)
+        }
+        reportBlockStatus(id, info)
+      }
+    }
+  }
+
+  private def dropOldBroadcastBlocks(cleanupTime: Long) {
+    logInfo("Dropping broadcast blocks older than " + cleanupTime)
+    val iterator = blockInfo.internalMap.entrySet().iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next()
+      val (id, info, time) = (entry.getKey, entry.getValue._1, entry.getValue._2)
+      if (time < cleanupTime && id.isBroadcast) {
         info.synchronized {
           val level = info.level
           if (level.useMemory) {
@@ -997,6 +1021,7 @@ private[spark] class BlockManager(
     memoryStore.clear()
     diskStore.clear()
     metadataCleaner.cancel()
+    broadcastCleaner.cancel()
     logInfo("BlockManager stopped")
   }
 }
