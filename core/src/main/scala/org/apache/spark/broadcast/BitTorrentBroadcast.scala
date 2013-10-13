@@ -26,7 +26,7 @@ import scala.collection.mutable.{ListBuffer, Map, Set}
 import scala.math
 
 import org.apache.spark._
-import org.apache.spark.storage.{BlockId, BroadcastBlockId, StorageLevel}
+import org.apache.spark.storage.{BroadcastBlockId, StorageLevel}
 import org.apache.spark.util.Utils
 
 private[spark] class BitTorrentBroadcast[T](@transient var value_ : T, isLocal: Boolean, id: Long)
