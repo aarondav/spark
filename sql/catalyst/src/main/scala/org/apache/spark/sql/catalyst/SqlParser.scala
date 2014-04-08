@@ -75,7 +75,7 @@ class SqlParser extends StandardTokenParsers with PackratParsers {
       | failure("illegal character")
     )
 
-    override def identChar = letter | elem('.') | elem('_')
+    override def identChar = letter | elem('.') | elem('_') | elem('[') | elem(']')
 
     override def whitespace: Parser[Any] = rep(
       whitespaceChar
@@ -363,6 +363,7 @@ class SqlParser extends StandardTokenParsers with PackratParsers {
     FALSE ^^^ Literal(false, BooleanType) |
     cast |
     "(" ~> expression <~ ")" |
+    "[" ~> literal <~ "]" |
     function |
     "-" ~> literal ^^ UnaryMinus |
     ident ^^ UnresolvedAttribute |
