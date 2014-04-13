@@ -526,6 +526,8 @@ class ParquetQuerySuite extends QueryTest with FunSuite with BeforeAndAfterAll {
   }
 
   test("Writing out Addressbook and reading it back in") {
+    // TODO: find out why CatalystConverter.ARRAY_ELEMENTS_SCHEMA_NAME
+    // has no effect in this test case
     implicit def anyToRow(value: Any): Row = value.asInstanceOf[Row]
     val tmpdir = Utils.createTempDir()
     val result = TestSQLContext
