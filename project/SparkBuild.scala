@@ -487,7 +487,10 @@ object SparkBuild extends Build {
     name := "spark-sql",
     libraryDependencies ++= Seq(
       "com.twitter" % "parquet-column" % parquetVersion,
-      "com.twitter" % "parquet-hadoop" % parquetVersion
+      "com.twitter" % "parquet-hadoop" % parquetVersion,
+      "com.twitter" % "parquet-avro" % parquetVersion % "test",
+      // here we need version >= 1.7.5 because of AVRO-1274
+      "org.apache.avro" % "avro" % "1.7.6" % "test"
     )
   )
 
