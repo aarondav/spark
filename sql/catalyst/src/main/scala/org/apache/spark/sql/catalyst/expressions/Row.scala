@@ -206,6 +206,7 @@ class GenericMutableRow(size: Int) extends GenericRow(size) with MutableRow {
   override def copy() = new GenericRow(values.clone())
 }
 
+
 class RowOrdering(ordering: Seq[SortOrder]) extends Ordering[Row] {
   def compare(a: Row, b: Row): Int = {
     var i = 0
