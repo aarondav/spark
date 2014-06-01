@@ -20,8 +20,8 @@ package org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.errors.TreeNodeException
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.types.StructType
 import org.apache.spark.sql.catalyst.trees
-import org.apache.spark.sql.catalyst.types._
 
 abstract class LogicalPlan extends QueryPlan[LogicalPlan] {
   self: Product =>
@@ -54,18 +54,16 @@ abstract class LogicalPlan extends QueryPlan[LogicalPlan] {
   /**
    * Optionally resolves the given string to a
    * [[catalyst.expressions.NamedExpression NamedExpression]]. The attribute is expressed as
-   * as string in the following form: `[scope].AttributeName.[nested].[fields]...`. Fields
-   * can contain ordinal expressions, such as `field[i][j][k]...`.
+   * as string in the following form: `[scope].AttributeName.[nested].[fields]...`.
    */
   def resolve(name: String): Option[NamedExpression] = {
-    // TODO: extend SqlParser to handle field expressions
     val parts = name.split("\\.")
     // Collect all attributes that are output by this nodes children where either the first part
     // matches the name or where the first part matches the scope and the second part matches the
     // name.  Return these matches along with any remaining parts, which represent dotted access to
     // struct fields.
     val options = children.flatMap(_.output).flatMap { option =>
-    // If the first part of the desired name matches a qualifier for this possible match, drop it.
+      // If the first part of the desired name matches a qualifier for this possible match, drop it.
       val remainingParts = if (option.qualifiers contains parts.head) parts.drop(1) else parts
       if (option.name == remainingParts.head) (option, remainingParts.tail.toList) :: Nil else Nil
     }
