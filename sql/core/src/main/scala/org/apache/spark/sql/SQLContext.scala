@@ -316,4 +316,41 @@ class SQLContext(@transient val sparkContext: SparkContext)
     new SchemaRDD(this, SparkLogicalPlan(ExistingRdd(schema, rowRdd)))
   }
 
+  def printOutputSchema(logicalPlan: LogicalPlan): Unit = {
+    println("root")
+    val prefix = " |"
+    logicalPlan.output.foreach {
+      attribute => {
+        val name = attribute.name
+        val dataType = attribute.dataType
+        dataType match {
+          case fields: StructType =>
+            println(s"$prefix-- $name: $StructType")
+            printSchema(fields, s"$prefix    |")
+          case ArrayType(fields: StructType) =>
+            println(s"$prefix-- $name: $ArrayType[$StructType}}]")
+            printSchema(fields, s"$prefix    |")
+          case ArrayType(elementType: DataType) =>
+            println(s"$prefix-- $name: $ArrayType[$elementType}}]")
+          case _ => println(s"$prefix-- $name: $dataType")
+        }
+      }
+    }
+  }
+
+  def printSchema(schema: StructType, intent: String): Unit = {
+    schema.fields.foreach {
+      case StructField(name, fields: StructType, _) =>
+        println(s"$intent-- $name: $StructType")
+        printSchema(fields, s"$intent    |")
+      case StructField(name, ArrayType(fields: StructType), _) =>
+        println(s"$intent-- $name: $ArrayType[$StructType]")
+        printSchema(fields, s"$intent    |")
+      case StructField(name, ArrayType(elementType: DataType), _) =>
+        println(s"$intent-- $name: $ArrayType[$elementType]")
+      case StructField(name, fieldType: DataType, _) =>
+        println(s"$intent-- $name: $fieldType")
+    }
+  }
+
 }

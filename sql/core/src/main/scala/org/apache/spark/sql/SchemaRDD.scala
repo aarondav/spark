@@ -27,10 +27,29 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.{Inner, JoinType}
-import org.apache.spark.sql.catalyst.types.BooleanType
+import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.execution.{ExistingRdd, SparkLogicalPlan}
 import org.apache.spark.api.java.JavaRDD
 import java.util.{Map => JMap}
+import org.apache.spark.sql.catalyst.plans.logical.Join
+import org.apache.spark.sql.catalyst.types.StructType
+import org.apache.spark.sql.catalyst.plans.logical.Subquery
+import org.apache.spark.sql.catalyst.plans.logical.Limit
+import org.apache.spark.sql.catalyst.expressions.Count
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.types.ArrayType
+import org.apache.spark.sql.catalyst.plans.logical.Sort
+import org.apache.spark.sql.catalyst.expressions.SortOrder
+import org.apache.spark.sql.catalyst.expressions.WrapDynamic
+import org.apache.spark.sql.catalyst.plans.logical.Filter
+import org.apache.spark.sql.catalyst.plans.logical.Sample
+import org.apache.spark.sql.catalyst.plans.logical.Union
+import org.apache.spark.sql.catalyst.plans.logical.Aggregate
+import org.apache.spark.sql.catalyst.plans.logical.Generate
+import org.apache.spark.sql.execution.SparkLogicalPlan
+import org.apache.spark.sql.catalyst.expressions.ScalaUdf
+import org.apache.spark.sql.catalyst.plans.logical.Project
+import org.apache.spark.sql.catalyst.expressions.Alias
 
 /**
  * :: AlphaComponent ::
@@ -113,6 +132,46 @@ class SchemaRDD(
 
   override protected def getDependencies: Seq[Dependency[_]] =
     List(new OneToOneDependency(queryExecution.toRdd))
+
+
+  def printSchema(): Unit = {
+    println("root")
+    val prefix = " |"
+    logicalPlan.output.foreach {
+      attribute => {
+        val name = attribute.name
+        val dataType = attribute.dataType
+        dataType match {
+          case fields: StructType =>
+            println(s"$prefix-- $name: $StructType")
+            printSchema(fields, s"$prefix    |")
+          case ArrayType(fields: StructType) =>
+            println(s"$prefix-- $name: $ArrayType[$StructType}}]")
+            printSchema(fields, s"$prefix    |")
+          case ArrayType(elementType: DataType) =>
+            println(s"$prefix-- $name: $ArrayType[$elementType}}]")
+          case _ => println(s"$prefix-- $name: $dataType")
+        }
+      }
+    }
+  }
+
+
+  private def printSchema(schema: StructType, intent: String): Unit = {
+    schema.fields.foreach {
+      case StructField(name, fields: StructType, _) =>
+        println(s"$intent-- $name: $StructType")
+        printSchema(fields, s"$intent    |")
+      case StructField(name, ArrayType(fields: StructType), _) =>
+        println(s"$intent-- $name: $ArrayType[$StructType]")
+        printSchema(fields, s"$intent    |")
+      case StructField(name, ArrayType(elementType: DataType), _) =>
+        println(s"$intent-- $name: $ArrayType[$elementType]")
+      case StructField(name, fieldType: DataType, _) =>
+        println(s"$intent-- $name: $fieldType")
+    }
+  }
+
 
 
   // =======================================================================
