@@ -122,6 +122,10 @@ trait SparkILoopInit {
          @transient val sc = org.apache.spark.repl.Main.interp.createSparkContext();
         """)
       command("import org.apache.spark.SparkContext._")
+      command("import org.apache.spark.sql.SQLContext")
+      command("import scala.collection.JavaConversions._")
+      command("sc.hadoopConfiguration.set(\"fs.s3n.awsAccessKeyId\", \"AKIAJVWFDJANMVISJ4MA\")")
+      command("sc.hadoopConfiguration.set(\"fs.s3n.awsSecretAccessKey\", \"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\")")
     }
     echo("Spark context available as sc.")
   }
