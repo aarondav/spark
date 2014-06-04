@@ -63,6 +63,16 @@ case class Nested(i: Int, s: String)
 
 case class Data(array: Seq[Int], nested: Nested)
 
+case class AllDataTypes(
+    stringField: String,
+    intField: Int,
+    longField: Long,
+    floatField: Float,
+    doubleField: Double,
+    shortField: Short,
+    byteField: Byte,
+    booleanField: Boolean)
+
 class ParquetQuerySuite extends QueryTest with FunSuite with BeforeAndAfterAll {
   import TestData._
   TestData // Load test data tables.
@@ -90,6 +100,13 @@ class ParquetQuerySuite extends QueryTest with FunSuite with BeforeAndAfterAll {
     Utils.deleteRecursively(ParquetTestData.testNestedDir3)
     Utils.deleteRecursively(ParquetTestData.testNestedDir4)
     // here we should also unregister the table??
+  }
+
+  test("Read/Write All Types") {
+    val data = AllDataTypes("a", 1, 1L, 1.toFloat, 1.toDouble, 1.toShort, 1.toByte, true)
+    val tempDir = getTempFilePath("parquetTest").getCanonicalPath
+    sparkContext.parallelize(data :: Nil).saveAsParquetFile(tempDir)
+    assert(parquetFile(tempDir).collect().head === data)
   }
 
   test("self-join parquet files") {
