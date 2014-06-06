@@ -89,8 +89,11 @@ object JsonTable extends Serializable with Logging {
         val dataType = typeSet.map {
           case (_, dataType) => dataType
         }.reduce((type1: DataType, type2: DataType) => getCompitableType(type1, type2))
-
-        (fieldName, dataType)
+        dataType match {
+          case NullType => (fieldName, StringType)
+          case ArrayType(NullType) => (fieldName, ArrayType(StringType))
+          case other => (fieldName, other)
+        }
       }
     }
 
@@ -160,8 +163,8 @@ object JsonTable extends Serializable with Logging {
     } else {
       // t1 or t2 is a StructType, ArrayType, or an unexpected type.
       (t1, t2) match {
-        case (other: DataType, NullType) => other
-        case (NullType, other: DataType) => other
+        case (other: DataType, NullType) if other != NullType => other
+        case (NullType, other: DataType) if other != NullType => other
         // TODO: Returns the union of fields1 and fields2?
         case (StructType(fields1), StructType(fields2))
           if (fields1 == fields2) => StructType(fields1)
