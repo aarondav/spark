@@ -487,12 +487,25 @@ object SparkBuild extends Build {
   def sqlCoreSettings = sharedSettings ++ Seq(
     name := "spark-sql",
     libraryDependencies ++= Seq(
-      "com.twitter" % "parquet-column" % parquetVersion,
-      "com.twitter" % "parquet-hadoop" % parquetVersion,
-      "com.twitter" % "parquet-avro" % parquetVersion % "test",
+      "com.twitter"                  % "parquet-column"             % parquetVersion,
+      "com.twitter"                  % "parquet-hadoop"             % parquetVersion,
+      "com.fasterxml.jackson.core"   % "jackson-core"               % "2.3.2",
       // here we need version >= 1.7.5 because of AVRO-1274
       "org.apache.avro" % "avro" % "1.7.6" % "test"
-    )
+    ),
+    initialCommands in console :=
+      """
+        |import org.apache.spark.sql.catalyst.analysis._
+        |import org.apache.spark.sql.catalyst.dsl._
+        |import org.apache.spark.sql.catalyst.errors._
+        |import org.apache.spark.sql.catalyst.expressions._
+        |import org.apache.spark.sql.catalyst.plans.logical._
+        |import org.apache.spark.sql.catalyst.rules._
+        |import org.apache.spark.sql.catalyst.types._
+        |import org.apache.spark.sql.catalyst.util._
+        |import org.apache.spark.sql.execution
+        |import org.apache.spark.sql.test.TestSQLContext._
+        |import org.apache.spark.sql.parquet.ParquetTestData""".stripMargin
   )
 
   // Since we don't include hive in the main assembly this project also acts as an alternative
