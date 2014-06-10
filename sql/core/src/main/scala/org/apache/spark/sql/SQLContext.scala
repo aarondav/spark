@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.{ScalaReflection, dsl}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.types._
 import org.apache.spark.sql.catalyst.optimizer.Optimizer
-import org.apache.spark.sql.catalyst.plans.logical.{Subquery, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{SetCommand, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.RuleExecutor
 
 import org.apache.spark.sql.columnar.InMemoryColumnarTableScan
@@ -53,6 +53,7 @@ import org.apache.spark.sql.json._
 @AlphaComponent
 class SQLContext(@transient val sparkContext: SparkContext)
   extends Logging
+  with SQLConf
   with dsl.ExpressionConversions
   with Serializable {
 
@@ -99,37 +100,35 @@ class SQLContext(@transient val sparkContext: SparkContext)
     new SchemaRDD(this, parquet.ParquetRelation(path))
 
   /**
-   * Loads a JSON file, returning the result as a [[SchemaRDD]].
-   * Right now, we only do eager schema resolution.
+   * Loads a JSON file (one object per line), returning the result as a [[SchemaRDD]]. The schema
+   * of the returned [[SchemaRDD]] is inferred based on the method specified by `mode`.
    */
   def jsonFile(
       path: String,
-      mode: SchemaResolutionMode = EAGER_SCHEMA_RESOLUTION): SchemaRDD = {
+      mode: SchemaResolutionMode = EagerSchemaResolution): SchemaRDD = {
     logger.info(s"Loads a JSON file $path.")
     val json = sparkContext.textFile(path)
     jsonRDD(json, mode)
   }
 
   /**
-   * Loads a RDD[String] storing JSON objects (one object per record),
-   * returning the result as a [[SchemaRDD]].
-   * Right now, we only do eager schema resolution.
+   * Loads a RDD[String] storing JSON objects (one object per record), returning the result as a
+   * [[SchemaRDD]]. The schema of the returned [[SchemaRDD]] is inferred based on the method
+   * specified by `mode`.
    */
   def jsonRDD(
       json: RDD[String],
-      mode: SchemaResolutionMode = EAGER_SCHEMA_RESOLUTION): SchemaRDD = {
+      mode: SchemaResolutionMode = EagerSchemaResolution): SchemaRDD = {
     mode match {
-      case EAGER_SCHEMA_RESOLUTION =>
+      case EagerSchemaResolution =>
         logger.info(s"Eagerly resolve the schema without sampling.")
         val logicalPlan = JsonTable.inferSchema(json)
         logicalPlanToSparkQuery(logicalPlan)
-      case EAGER_SCHEMA_RESOLUTION_WITH_SAMPLING(fraction) =>
+      case EagerSchemaResolutionWithSampling(fraction) =>
         logger.info(s"Eagerly resolve the schema with sampling " +
           s"(sampling fraction: $fraction).")
-        val logicalPlan = JsonTable.inferSchema(json, Some(fraction))
+        val logicalPlan = JsonTable.inferSchema(json, fraction)
         logicalPlanToSparkQuery(logicalPlan)
-      case LAZY_SCHEMA_RESOLUTION =>
-        throw new UnsupportedOperationException("Lazy schema resolution has not been implemented.")
     }
   }
 
@@ -226,9 +225,13 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected[sql] class SparkPlanner extends SparkStrategies {
     val sparkContext = self.sparkContext
 
+    def numPartitions = self.numShufflePartitions
+
     val strategies: Seq[Strategy] =
+      CommandStrategy(self) ::
       TakeOrdered ::
       PartialAggregation ::
+      LeftSemiJoin ::
       HashJoin ::
       ParquetOperations ::
       BasicOperators ::
@@ -280,6 +283,10 @@ class SQLContext(@transient val sparkContext: SparkContext)
   @transient
   protected[sql] val planner = new SparkPlanner
 
+  @transient
+  protected[sql] lazy val emptyResult =
+    sparkContext.parallelize(Seq(new GenericRow(Array[Any]()): Row), 1)
+
   /**
    * Prepares a planned SparkPlan for execution by binding references to specific ordinals, and
    * inserting shuffle operations as needed.
@@ -287,7 +294,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   @transient
   protected[sql] val prepareForExecution = new RuleExecutor[SparkPlan] {
     val batches =
-      Batch("Add exchange", Once, AddExchange) ::
+      Batch("Add exchange", Once, AddExchange(self)) ::
       Batch("Prepare Expressions", Once, new BindReferences[SparkPlan]) :: Nil
   }
 
@@ -298,6 +305,22 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected abstract class QueryExecution {
     def logical: LogicalPlan
 
+    def eagerlyProcess(plan: LogicalPlan): RDD[Row] = plan match {
+      case SetCommand(key, value) =>
+        // Only this case needs to be executed eagerly. The other cases will
+        // be taken care of when the actual results are being extracted.
+        // In the case of HiveContext, sqlConf is overridden to also pass the
+        // pair into its HiveConf.
+        if (key.isDefined && value.isDefined) {
+          set(key.get, value.get)
+        }
+        // It doesn't matter what we return here, since this is only used
+        // to force the evaluation to happen eagerly.  To query the results,
+        // one must use SchemaRDD operations to extract them.
+        emptyResult
+      case _ => executedPlan.execute()
+    }
+
     lazy val analyzed = analyzer(logical)
     lazy val optimizedPlan = optimizer(analyzed)
     // TODO: Don't just pick the first one...
@@ -305,7 +328,12 @@ class SQLContext(@transient val sparkContext: SparkContext)
     lazy val executedPlan: SparkPlan = prepareForExecution(sparkPlan)
 
     /** Internal version of the RDD. Avoids copies and has no schema */
-    lazy val toRdd: RDD[Row] = executedPlan.execute()
+    lazy val toRdd: RDD[Row] = {
+      logical match {
+        case s: SetCommand => eagerlyProcess(s)
+        case _ => executedPlan.execute()
+      }
+    }
 
     protected def stringOrError[A](f: => A): String =
       try f.toString catch { case e: Throwable => e.toString }
@@ -320,11 +348,6 @@ class SQLContext(@transient val sparkContext: SparkContext)
          |== Physical Plan ==
          |${stringOrError(executedPlan)}
       """.stripMargin.trim
-
-    /**
-     * Runs the query after interposing operators that print the result of each intermediate step.
-     */
-    def debugExec() = DebugQuery(executedPlan).execute().collect()
   }
 
   /**
