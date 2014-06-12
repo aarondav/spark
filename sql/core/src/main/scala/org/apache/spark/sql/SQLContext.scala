@@ -127,7 +127,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
       case EagerSchemaResolutionWithSampling(fraction) =>
         logger.info(s"Eagerly resolve the schema with sampling " +
           s"(sampling fraction: $fraction).")
-        val logicalPlan = JsonTable.inferSchema(json, fraction)
+        val logicalPlan = JsonTable.inferSchema(json, Some(fraction))
         logicalPlanToSparkQuery(logicalPlan)
     }
   }

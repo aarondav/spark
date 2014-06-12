@@ -18,8 +18,8 @@ import scala.math.BigDecimal
 
 sealed trait SchemaResolutionMode
 
-case object EAGER_SCHEMA_RESOLUTION extends SchemaResolutionMode
-case class EAGER_SCHEMA_RESOLUTION_WITH_SAMPLING(val fraction: Double) extends SchemaResolutionMode
+case object EagerSchemaResolution extends SchemaResolutionMode
+case class EagerSchemaResolutionWithSampling(val fraction: Double) extends SchemaResolutionMode
 case object LAZY_SCHEMA_RESOLUTION extends SchemaResolutionMode
 
 /**
