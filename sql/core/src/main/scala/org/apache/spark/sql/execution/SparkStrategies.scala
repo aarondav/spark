@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.parquet._
-import org.apache.spark.sql.columnar.{InMemoryRelation, InMemoryColumnarTableScan}
+import org.apache.spark.sql.columnar.{OffHeapColumnarTableScan, OffHeapRelation, InMemoryRelation, InMemoryColumnarTableScan}
 
 private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   self: SQLContext#SparkPlanner =>
@@ -201,6 +201,12 @@ private[sql] abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           filters,
           identity[Seq[Expression]], // No filters are pushed down.
           InMemoryColumnarTableScan(_, mem)) :: Nil
+      case PhysicalOperation(projectList, filters, off: OffHeapRelation) =>
+        pruneFilterProject(
+          projectList,
+          filters,
+          identity[Seq[Expression]], // No filters are pushed down.
+          OffHeapColumnarTableScan(_, off)) :: Nil
       case _ => Nil
     }
   }

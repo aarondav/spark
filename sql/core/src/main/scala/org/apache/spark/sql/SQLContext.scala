@@ -34,13 +34,16 @@ import org.apache.spark.sql.catalyst.optimizer.Optimizer
 import org.apache.spark.sql.catalyst.plans.logical.{SetCommand, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.RuleExecutor
 
-import org.apache.spark.sql.columnar.InMemoryRelation
+import org.apache.spark.sql.columnar.{ReadBlockAsByteBuffer, OffHeapRelation, InMemoryRelation}
 
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.SparkStrategies
 
 import org.apache.spark.sql.parquet.ParquetRelation
 import org.apache.spark.sql.json._
+import org.apache.hadoop.fs.{Path, FileSystem}
+import tachyon.hadoop.TFS
+import java.nio.ByteBuffer
 
 /**
  * :: AlphaComponent ::
@@ -160,7 +163,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
   def createParquetFile[A <: Product : TypeTag](
       path: String,
       allowExisting: Boolean = true,
-      conf: Configuration = new Configuration()): SchemaRDD = {
+      conf: Configuration = sparkContext.hadoopConfiguration): SchemaRDD = {
     new SchemaRDD(
       this,
       ParquetRelation.createEmpty(path, ScalaReflection.attributesFor[A], allowExisting, conf))
@@ -195,18 +198,50 @@ class SQLContext(@transient val sparkContext: SparkContext)
     new SchemaRDD(this, catalog.lookupRelation(None, tableName))
 
   /** Caches the specified table in-memory. */
-  def cacheTable(tableName: String): Unit = {
+  def cacheTable(tableName: String, offheap: Boolean = false): Unit = {
     val currentTable = catalog.lookupRelation(None, tableName)
     val useCompression =
       sparkContext.conf.getBoolean("spark.sql.inMemoryColumnarStorage.compressed", false)
+
     val asInMemoryRelation =
-      InMemoryRelation(useCompression, executePlan(currentTable).executedPlan)
+      if (!offheap) {
+        InMemoryRelation(useCompression, executePlan(currentTable).executedPlan)
+      } else {
+        object TfsBlockReader extends ReadBlockAsByteBuffer {
+          def readBlockAsByteBuffer(fs: FileSystem, path: Path): ByteBuffer = {
+            require(path != null)
+            val tfs = fs.asInstanceOf[TFS]
+            require(tfs != null)
+            val tachyonFS = tfs.getTachyonFS
+            require(tachyonFS != null)
+            val file = tachyonFS.getFile(path.toString)
+            require(file != null, "Could not find " + path)
+            val bb = file.readByteBuffer()
+            require(bb != null)
+            bb.DATA
+          }
+        }
+        def createFS = () => {
+//          val HACKCONF = new Configuration()
+//          HACKCONF.set("fs.tachyon.impl", classOf[TFS].toString)
+//          FileSystem.get(new java.net.URI("tachyon://localhost:19998/"), HACKCONF)
+          val tfs = new TFS()
+          tfs.initialize(new java.net.URI("tachyon://localhost:19998/"), new Configuration())
+          tfs.setConf(new Configuration)
+          tfs
+        }
+        val rel = OffHeapRelation(useCompression, executePlan(currentTable).executedPlan,
+          createFS, TfsBlockReader, sparkContext)
+        rel.cacheColumnBuffers()
+        rel
+      }
 
     catalog.registerTable(None, tableName, asInMemoryRelation)
   }
 
   /** Removes the specified table from the in-memory cache. */
   def uncacheTable(tableName: String): Unit = {
+    // TODO: Offheap
     EliminateAnalysisOperators(catalog.lookupRelation(None, tableName)) match {
       // This is kind of a hack to make sure that if this was just an RDD registered as a table,
       // we reregister the RDD as a table.
@@ -226,6 +261,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
     val relation = catalog.lookupRelation(None, tableName)
     EliminateAnalysisOperators(relation) match {
       case _: InMemoryRelation => true
+      case _: OffHeapRelation => true
       case _ => false
     }
   }
