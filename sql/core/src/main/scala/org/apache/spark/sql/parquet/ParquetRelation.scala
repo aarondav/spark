@@ -128,6 +128,7 @@ private[sql] object ParquetRelation {
     if (conf.get(ParquetOutputFormat.COMPRESSION) == null) {
       conf.set(ParquetOutputFormat.COMPRESSION, ParquetRelation.defaultCompression.name())
     }
+    conf.setBoolean(ParquetOutputFormat.ENABLE_DICTIONARY, false)
     ParquetRelation.enableLogForwarding()
     ParquetTypesConverter.writeMetaData(attributes, path, conf)
     new ParquetRelation(path.toString) {
