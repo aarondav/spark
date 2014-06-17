@@ -134,7 +134,7 @@ private[sql] object CatalystConverter {
   }
 }
 
-private[parquet] trait CatalystConverter {
+private[parquet] abstract class CatalystConverter extends GroupConverter {
   /**
    * The number of fields this group has
    */
@@ -211,7 +211,7 @@ private[parquet] class CatalystGroupConverter(
     protected[parquet] val parent: CatalystConverter,
     protected[parquet] var current: ArrayBuffer[Any],
     protected[parquet] var buffer: ArrayBuffer[Row])
-  extends GroupConverter with CatalystConverter {
+  extends CatalystConverter {
 
   def this(schema: Seq[FieldType], index: Int, parent: CatalystConverter) =
     this(
@@ -279,7 +279,7 @@ private[parquet] class CatalystGroupConverter(
 private[parquet] class CatalystPrimitiveRowConverter(
     private[this] val schema: Seq[FieldType],
     private[this] var current: ParquetRelation.RowType)
-  extends GroupConverter with CatalystConverter {
+  extends CatalystConverter {
 
   private[this] val schemaLength = schema.length
 
@@ -400,7 +400,7 @@ private[parquet] class CatalystArrayConverter(
     val index: Int,
     protected[parquet] val parent: CatalystConverter,
     protected[parquet] var buffer: Buffer[Any])
-  extends GroupConverter with CatalystConverter {
+  extends CatalystConverter {
 
   def this(elementType: DataType, index: Int, parent: CatalystConverter) =
     this(
@@ -464,7 +464,7 @@ private[parquet] class CatalystNativeArrayConverter(
     val index: Int,
     protected[parquet] val parent: CatalystConverter,
     protected[parquet] var capacity: Int = CatalystArrayConverter.INITIAL_ARRAY_SIZE)
-  extends GroupConverter with CatalystConverter {
+  extends CatalystConverter {
 
   type NativeType = elementType.JvmType
 
@@ -610,11 +610,11 @@ private[parquet] class CatalystMapConverter(
     protected[parquet] val schema: Seq[FieldType],
     override protected[parquet] val index: Int,
     override protected[parquet] val parent: CatalystConverter)
-  extends GroupConverter with CatalystConverter {
+  extends CatalystConverter {
 
   private val map = new HashMap[Any, Any]()
 
-  private val keyValueConverter = new GroupConverter with CatalystConverter {
+  private val keyValueConverter = new CatalystConverter {
     private var currentKey: Any = null
     private var currentValue: Any = null
     val keyConverter = CatalystConverter.createConverter(schema(0), 0, this)
