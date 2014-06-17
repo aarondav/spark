@@ -277,9 +277,11 @@ private[parquet] class CatalystGroupConverter(
  * converter is optimized for rows of primitive types (non-nested records).
  */
 private[parquet] class CatalystPrimitiveRowConverter(
-    protected[parquet] val schema: Seq[FieldType],
-    protected[parquet] var current: ParquetRelation.RowType)
+    private[this] val schema: Seq[FieldType],
+    private[this] var current: ParquetRelation.RowType)
   extends GroupConverter with CatalystConverter {
+
+  private[this] val schemaLength = schema.length
 
   // This constructor is used for the root converter only
   def this(attributes: Seq[Attribute]) =
@@ -313,7 +315,7 @@ private[parquet] class CatalystPrimitiveRowConverter(
 
   override def start(): Unit = {
     var i = 0
-    while (i < schema.length) {
+    while (i < schemaLength) {
       current.setNullAt(i)
       i = i + 1
     }

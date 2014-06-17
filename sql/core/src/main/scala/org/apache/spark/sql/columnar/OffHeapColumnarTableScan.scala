@@ -177,26 +177,39 @@ private[sql] case class OffHeapColumnarTableScan(
     val requestedColumns =
       if (attributes.isEmpty) Seq(0) else attributes.map(relation.output.indexOf(_))
 
-    new TachyonRelationReader(relation, relation.baseDir, requestedColumns)
+    val sum = new TachyonRelationReader(relation, relation.baseDir, requestedColumns)
       .mapPartitions { iterator =>
-        val columnBuffers = iterator.next()
-        assert(!iterator.hasNext)
-
-        new Iterator[Row] {
-          val columnAccessors = requestedColumns.map(columnBuffers(_)).map(ColumnAccessor(_))
-          val nextRow = new GenericMutableRow(columnAccessors.length)
-
-          override def next() = {
-            var i = 0
-            while (i < nextRow.length) {
-              columnAccessors(i).extractTo(nextRow, i)
-              i += 1
-            }
-            nextRow
-          }
-
-          override def hasNext = columnAccessors.head.hasNext
+        var partialSum: Long = 0
+        val columnBuffer = iterator.next().head
+        while (columnBuffer.hasRemaining) {
+          partialSum += columnBuffer.getLong
         }
-      }
+        Iterator(partialSum)
+      }.fold(0)(_ + _)
+
+    throw new IllegalStateException("Your answer, sir, is " + sum)
   }
+//
+//    new TachyonRelationReader(relation, relation.baseDir, requestedColumns)
+//      .mapPartitions { iterator =>
+//        val columnBuffers = iterator.next()
+//        assert(!iterator.hasNext)
+//
+//        new Iterator[Row] {
+//          val columnAccessors = columnBuffers.map(ColumnAccessor(_))
+//          val nextRow = new GenericMutableRow(columnAccessors.length)
+//
+//          override def next() = {
+//            var i = 0
+//            while (i < nextRow.length) {
+//              columnAccessors(i).extractTo(nextRow, i)
+//              i += 1
+//            }
+//            nextRow
+//          }
+//
+//          override def hasNext = columnAccessors.head.hasNext
+//        }
+//      }
+//  }
 }
