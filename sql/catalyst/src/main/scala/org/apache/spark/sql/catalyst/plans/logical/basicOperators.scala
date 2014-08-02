@@ -129,9 +129,19 @@ case class InsertIntoTable(
 case class InsertIntoCreatedTable(
     databaseName: Option[String],
     tableName: String,
+    format: Option[Class[LogicalPlan]],
     child: LogicalPlan) extends UnaryNode {
   override def references = Set.empty
   override def output = child.output
+}
+
+case class CreateExternalTable(
+    databaseName: Option[String],
+    tableName: String,
+    format: Option[Class[LogicalPlan]],
+    location: String) extends LeafNode {
+  override def references = Set.empty
+  override def output = Seq.empty
 }
 
 case class WriteToFile(

@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hive
 
+import org.apache.spark.sql.parquet.ParquetRelation
+import parquet.hadoop.ParquetInputFormat
+
 import scala.util.parsing.combinator.RegexParsers
 
 import org.apache.hadoop.fs.Path
@@ -63,16 +66,25 @@ private[hive] class HiveMetastoreCatalog(hive: HiveContext) extends Catalog with
         Nil
       }
 
-    // Since HiveQL is case insensitive for table names we make them all lowercase.
-    MetastoreRelation(
-      databaseName, tblName, alias)(
-      table.getTTable, partitions.map(part => part.getTPartition))(hive)
+    val ParquetInputFormat = classOf[ParquetRelation]
+    table.getInputFormatClass match {
+      case ParquetInputFormat =>
+        ParquetRelation(table.getDataLocation.toString, Some(hive.sparkContext.hadoopConfiguration))
+
+      case _ =>
+        // Since HiveQL is case insensitive for table names we make them all lowercase.
+        MetastoreRelation(
+          databaseName, tblName, alias)(
+          table.getTTable, partitions.map(part => part.getTPartition))(hive)
+    }
   }
 
   def createTable(
       databaseName: String,
       tableName: String,
       schema: Seq[Attribute],
+      format: Option[Class[LogicalPlan]],
+      location: Option[String],
       allowExisting: Boolean = false): Unit = {
     val (dbName, tblName) = processDatabaseAndTableName(databaseName, tableName)
     val table = new Table(dbName, tblName)
@@ -87,8 +99,10 @@ private[hive] class HiveMetastoreCatalog(hive: HiveContext) extends Catalog with
     // TODO: THESE ARE ALL DEFAULTS, WE NEED TO PARSE / UNDERSTAND the output specs.
     sd.setCompressed(false)
     sd.setParameters(Map[String, String]())
-    sd.setInputFormat("org.apache.hadoop.mapred.TextInputFormat")
+    sd.setInputFormat(
+      format.map(_.getCanonicalName).getOrElse("org.apache.hadoop.mapred.TextInputFormat"))
     sd.setOutputFormat("org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat")
+    location.foreach(sd.setLocation)
     val serDeInfo = new SerDeInfo()
     serDeInfo.setName(tblName)
     serDeInfo.setSerializationLib("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe")
@@ -108,11 +122,11 @@ private[hive] class HiveMetastoreCatalog(hive: HiveContext) extends Catalog with
    */
   object CreateTables extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-      case InsertIntoCreatedTable(db, tableName, child) =>
+      case InsertIntoCreatedTable(db, tableName, format, child) =>
         val (dbName, tblName) = processDatabaseAndTableName(db, tableName)
         val databaseName = dbName.getOrElse(hive.sessionState.getCurrentDatabase)
 
-        createTable(databaseName, tblName, child.output)
+        createTable(databaseName, tblName, child.output, format, None)
 
         InsertIntoTable(
           EliminateAnalysisOperators(
