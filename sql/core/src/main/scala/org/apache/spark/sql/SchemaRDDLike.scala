@@ -75,7 +75,11 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   def saveAsParquetFile(path: String): Unit = {
-    sqlContext.executePlan(WriteToFile(new HadoopDirectory(path), classOf[ParquetFormat], logicalPlan)).toRdd
+    saveAsFile(path, classOf[ParquetFormat])
+  }
+
+  def saveAsFile(path: String, format: Class[_ <: ParquetFormat]): Unit = {
+    sqlContext.executePlan(WriteToFile(new HadoopDirectory(path), format, logicalPlan)).toRdd
   }
 
   /**
@@ -121,8 +125,11 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   @Experimental
-  def saveAsTable(tableName: String, format: Class[_ <: RelationFormat]): Unit =
+  def saveAsTable(
+      tableName: String,
+      format: Class[_ <: RelationFormat] = sqlContext.defaultTableFormat): Unit = {
     sqlContext.executePlan(InsertIntoCreatedTable(None, tableName, format, logicalPlan)).toRdd
+  }
 
   /** Returns the schema as a string in the tree format.
    *

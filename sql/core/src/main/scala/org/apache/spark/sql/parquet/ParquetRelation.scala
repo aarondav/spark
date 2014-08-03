@@ -47,7 +47,7 @@ import scala.reflect.runtime.universe._
  * @param path The path to the Parquet file.
  */
 
-class HadoopDirectory(path: String) extends PhysicalLocation with HadoopDirectoryLike {
+class HadoopDirectory(path: String) extends TableLocation with HadoopDirectoryLike {
   def this(path: Path) = this(path.toString)
 
   def asString = path
@@ -70,22 +70,30 @@ trait HadoopDirectoryLike {
 }
 
 class ParquetFormat(sqlContext: SQLContext, conf: Configuration) extends RelationFormat {
-  override def createEmptyRelation(
-      location: PhysicalLocation,
-      output: Seq[Attribute]): LogicalPlan = {
+
+  /**
+   * Creates a new ParquetRelation and underlying Parquetfile for the given LogicalPlan. Note that
+   * this is used inside [[org.apache.spark.sql.execution.SparkStrategies SparkStrategies]] to
+   * create a resolved relation as a data sink for writing to a Parquetfile. The relation is empty
+   * but is initialized with ParquetMetadata and can be inserted into.
+   *
+   * @return An empty ParquetRelation with inferred metadata.
+   */
+  override def createEmptyRelation(location: TableLocation, output: Seq[Attribute]): LogicalPlan = {
     location match {
       case dir: HadoopDirectoryLike =>
         ParquetRelation.createEmpty(dir.asHadoopDirectory, output, false, conf, sqlContext)
       case _ =>
-        throw new IllegalArgumentException("Parquet relation must be a Hadoop Directory")
+        sys.error(s"Parquet relation only supports hadoop directories, found: $location")
     }
-
   }
 
-  override def loadRelation(location: PhysicalLocation): LogicalPlan = {
+  override def loadRelation(location: TableLocation): LogicalPlan = {
     location match {
-      case dir: HadoopDirectoryLike => new ParquetRelation(dir.asHadoopDirectory, conf, sqlContext)
-      case _ => throw new IllegalArgumentException("Parquet relation must be a Hadoop Directory")
+      case dir: HadoopDirectoryLike =>
+        new ParquetRelation(dir.asHadoopDirectory, conf, sqlContext)
+      case _ =>
+        sys.error(s"Parquet relation only supports hadoop directories, found: $location")
     }
   }
 }
@@ -94,7 +102,7 @@ private[sql] case class ParquetRelation(
     location: HadoopDirectory,
     @transient conf: Configuration,
     @transient sqlContext: SQLContext)
-  extends SqlRelation with MultiInstanceRelation {
+  extends LeafNode with MultiInstanceRelation {
 
   self: Product =>
 
@@ -144,29 +152,6 @@ private[sql] object ParquetRelation {
   val defaultCompression = CompressionCodecName.GZIP
 
   /**
-   * Creates a new ParquetRelation and underlying Parquetfile for the given LogicalPlan. Note that
-   * this is used inside [[org.apache.spark.sql.execution.SparkStrategies SparkStrategies]] to
-   * create a resolved relation as a data sink for writing to a Parquetfile. The relation is empty
-   * but is initialized with ParquetMetadata and can be inserted into.
-   *
-   * @param pathString The directory the Parquetfile will be stored in.
-   * @param child The child node that will be used for extracting the schema.
-   * @param conf A configuration to be used.
-   * @return An empty ParquetRelation with inferred metadata.
-   */
-  def create(pathString: String,
-             child: LogicalPlan,
-             conf: Configuration,
-             sqlContext: SQLContext): ParquetRelation = {
-    if (!child.resolved) {
-      throw new UnresolvedException[LogicalPlan](
-        child,
-        "Attempt to create Parquet table from unresolved child (when schema is not available)")
-    }
-    createEmpty(new HadoopDirectory(pathString), child.output, false, conf, sqlContext)
-  }
-
-  /**
    * Creates an empty ParquetRelation and underlying Parquetfile that only
    * consists of the Metadata for the given schema.
    *
@@ -191,22 +176,17 @@ private[sql] object ParquetRelation {
     }
   }
 
-  private def checkPath(dir: PhysicalLocation, allowExisting: Boolean, conf: Configuration): HadoopDirectory = {
-    if (dir == null) {
+  private def checkPath(dir: HadoopDirectory, allowExisting: Boolean, conf: Configuration): HadoopDirectory = {
+    val path = dir.asPath
+    if (path == null) {
       throw new IllegalArgumentException("Unable to create ParquetRelation: path is null")
     }
-    val origPath = dir match {
-      case hadoopDir: HadoopDirectory =>
-        hadoopDir.asPath
-      case _ =>
-        throw new IllegalArgumentException("ParquetRelation can only write to Hadoop directories")
-    }
-    val fs = origPath.getFileSystem(conf)
+    val fs = path.getFileSystem(conf)
     if (fs == null) {
       throw new IllegalArgumentException(
         s"Unable to create ParquetRelation: incorrectly formatted path $dir")
     }
-    val path = origPath.makeQualified(fs)
+
     if (!allowExisting && fs.exists(path) && fs.listStatus(path).nonEmpty) {
       sys.error(s"File $dir already exists and is not empty.")
     }
@@ -219,6 +199,6 @@ private[sql] object ParquetRelation {
       throw new IOException(
         s"Unable to create ParquetRelation: path $path not read-writable")
     }
-    new HadoopDirectory(path)
+    new HadoopDirectory(fs.makeQualified(path))
   }
 }

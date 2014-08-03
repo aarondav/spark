@@ -35,7 +35,7 @@ import org.apache.spark.sql.columnar.InMemoryRelation
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.SparkStrategies
 import org.apache.spark.sql.json._
-import org.apache.spark.sql.parquet.{HadoopDirectory, ParquetRelation}
+import org.apache.spark.sql.parquet.{ParquetFormat, HadoopDirectory, ParquetRelation}
 import org.apache.spark.SparkContext
 
 /**
@@ -69,6 +69,8 @@ class SQLContext(@transient val sparkContext: SparkContext)
   protected[sql] def executeSql(sql: String): this.QueryExecution = executePlan(parseSql(sql))
   protected[sql] def executePlan(plan: LogicalPlan): this.QueryExecution =
     new this.QueryExecution { val logical = plan }
+
+  protected[sql] def defaultTableFormat: Class[_ <: RelationFormat] = classOf[ParquetFormat]
 
   /**
    * :: DeveloperApi ::

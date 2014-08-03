@@ -301,7 +301,7 @@ object HiveMetastoreTypes extends RegexParsers {
 }
 
 case class HiveTableLocation(databaseName: String, tableName: String, alias: Option[String], table: TTable, partitions: Seq[TPartition])
-  extends PhysicalLocation with HadoopDirectoryLike {
+  extends TableLocation with HadoopDirectoryLike {
   override def asHadoopDirectory: HadoopDirectory = {
     require(partitions.isEmpty, "A partitioned table cannot be represented as a HadoopDirectory")
     new HadoopDirectory(table.getSd.getLocation)
@@ -311,7 +311,7 @@ case class HiveTableLocation(databaseName: String, tableName: String, alias: Opt
 private[hive] case class MetastoreRelation
     (location: HiveTableLocation)
     (@transient hiveContext: HiveContext)
-  extends SqlRelation {
+  extends LeafNode {
 
   self: Product =>
 
@@ -372,14 +372,12 @@ private[hive] case class MetastoreRelation
 }
 
 class HiveMetastoreFormat(hiveContext: HiveContext, conf: Configuration) extends RelationFormat {
-  override def createEmptyRelation(
-                                    location: PhysicalLocation,
-                                    output: Seq[Attribute]): LogicalPlan = {
+  override def createEmptyRelation(location: TableLocation, output: Seq[Attribute]): LogicalPlan = {
     // TODO: Do
     new MetastoreRelation(location.asInstanceOf[HiveTableLocation])(hiveContext)
   }
 
-  override def loadRelation(location: PhysicalLocation): LogicalPlan = {
+  override def loadRelation(location: TableLocation): LogicalPlan = {
     new MetastoreRelation(location.asInstanceOf[HiveTableLocation])(hiveContext)
 //    location match {
 //      case hadoopDir: HadoopDirectory => new ParquetRelation(hadoopDir, conf, sqlContext)

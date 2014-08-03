@@ -23,18 +23,11 @@ import org.apache.spark.sql.catalyst.expressions.Attribute
 
 import scala.reflect.runtime.universe._
 
-
-abstract class SqlRelation extends LeafNode {
-  self: Product =>
-
-  def location: PhysicalLocation
-}
-
-trait PhysicalLocation extends Serializable {
+trait TableLocation extends Serializable {
   def equals(other: Any): Boolean
 }
 
 abstract class RelationFormat {
-  def createEmptyRelation(location: PhysicalLocation, output: Seq[Attribute]): LogicalPlan
-  def loadRelation(location: PhysicalLocation): LogicalPlan
+  def createEmptyRelation(location: TableLocation, output: Seq[Attribute]): LogicalPlan
+  def loadRelation(location: TableLocation): LogicalPlan
 }

@@ -21,6 +21,9 @@ import java.io.{BufferedReader, File, InputStreamReader, PrintStream}
 import java.sql.Timestamp
 import java.util.{ArrayList => JArrayList}
 
+import org.apache.spark.annotation.Experimental
+import org.apache.spark.sql.parquet.ParquetFormat
+
 import scala.collection.JavaConversions._
 import scala.language.implicitConversions
 import scala.reflect.runtime.universe.TypeTag
@@ -72,6 +75,9 @@ class HiveContext(sc: SparkContext) extends SQLContext(sc) {
 
   override protected[sql] def executePlan(plan: LogicalPlan): this.QueryExecution =
     new this.QueryExecution { val logical = plan }
+
+  override protected[sql] def defaultTableFormat = classOf[HiveMetastoreFormat]
+
 
   /**
    * Executes a query expressed in HiveQL using Spark, returning the result as a SchemaRDD.

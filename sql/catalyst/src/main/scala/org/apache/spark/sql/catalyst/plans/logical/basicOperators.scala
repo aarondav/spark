@@ -136,7 +136,7 @@ case class InsertIntoCreatedTable(
 }
 
 case class WriteToFile(
-    path: PhysicalLocation,
+    path: TableLocation,
     format: Class[_ <: RelationFormat],
     child: LogicalPlan) extends UnaryNode {
   override def references = Set.empty
