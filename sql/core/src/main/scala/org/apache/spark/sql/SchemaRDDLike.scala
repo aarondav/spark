@@ -21,6 +21,7 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.SparkLogicalPlan
+import org.apache.spark.sql.parquet.{ParquetFormat, HadoopDirectory}
 
 /**
  * Contains functions that are shared between all SchemaRDD types (i.e., Scala, Java)
@@ -74,7 +75,7 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   def saveAsParquetFile(path: String): Unit = {
-    sqlContext.executePlan(WriteToFile(path, logicalPlan)).toRdd
+    sqlContext.executePlan(WriteToFile(new HadoopDirectory(path), classOf[ParquetFormat], logicalPlan)).toRdd
   }
 
   /**
@@ -120,8 +121,8 @@ private[sql] trait SchemaRDDLike {
    * @group schema
    */
   @Experimental
-  def saveAsTable(tableName: String): Unit =
-    sqlContext.executePlan(InsertIntoCreatedTable(None, tableName, None, logicalPlan)).toRdd
+  def saveAsTable(tableName: String, format: Class[_ <: RelationFormat]): Unit =
+    sqlContext.executePlan(InsertIntoCreatedTable(None, tableName, format, logicalPlan)).toRdd
 
   /** Returns the schema as a string in the tree format.
    *

@@ -29,13 +29,13 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.dsl.ExpressionConversions
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.optimizer.Optimizer
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{RelationFormat, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.RuleExecutor
 import org.apache.spark.sql.columnar.InMemoryRelation
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.SparkStrategies
 import org.apache.spark.sql.json._
-import org.apache.spark.sql.parquet.ParquetRelation
+import org.apache.spark.sql.parquet.{HadoopDirectory, ParquetRelation}
 import org.apache.spark.SparkContext
 
 /**
@@ -131,7 +131,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
    * @group userf
    */
   def parquetFile(path: String): SchemaRDD =
-    new SchemaRDD(this, parquet.ParquetRelation(path, Some(sparkContext.hadoopConfiguration), this))
+    new SchemaRDD(this, parquet.ParquetRelation(new HadoopDirectory(path), sparkContext.hadoopConfiguration, this))
 
   /**
    * Loads a JSON file (one object per line), returning the result as a [[SchemaRDD]].
@@ -229,7 +229,7 @@ class SQLContext(@transient val sparkContext: SparkContext)
     new SchemaRDD(
       this,
       ParquetRelation.createEmpty(
-        path, ScalaReflection.attributesFor[A], allowExisting, conf, this))
+        new HadoopDirectory(path), ScalaReflection.attributesFor[A], allowExisting, conf, this))
   }
 
   /**
@@ -499,5 +499,21 @@ class SQLContext(@transient val sparkContext: SparkContext)
     }
 
     new SchemaRDD(this, SparkLogicalPlan(ExistingRdd(schema.toAttributes, rowRdd))(self))
+  }
+
+  def instantiateRelationFormat(cls: Class[_ <: RelationFormat]): RelationFormat = {
+    val myParams = Seq[AnyRef](this, sparkContext.hadoopConfiguration)
+    val ctors = cls.getConstructors
+    if (ctors.length > 1) {
+      throw new IllegalArgumentException("Cannot construct RelationFormat " + cls + ", has multiple constructors.")
+    }
+
+    val ctor = ctors.head
+    val params = ctor.getParameterTypes
+    val physicalParams = params.map { case p =>
+      myParams.find(myParam => p.isAssignableFrom(myParam.getClass)).getOrElse(
+        throw new IllegalArgumentException("Could not find parameter for class " + p))
+    }
+    ctor.newInstance(physicalParams: _*).asInstanceOf[RelationFormat]
   }
 }

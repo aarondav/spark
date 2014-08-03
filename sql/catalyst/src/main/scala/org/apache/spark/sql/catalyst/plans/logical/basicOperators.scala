@@ -111,7 +111,7 @@ case class Except(left: LogicalPlan, right: LogicalPlan) extends BinaryNode {
 }
 
 case class InsertIntoTable(
-    table: LogicalPlan,
+    table: LogicalPlan /* want SqlRelation */,
     partition: Map[String, Option[String]],
     child: LogicalPlan,
     overwrite: Boolean)
@@ -129,23 +129,15 @@ case class InsertIntoTable(
 case class InsertIntoCreatedTable(
     databaseName: Option[String],
     tableName: String,
-    format: Option[Class[LogicalPlan]],
+    format: Class[_ <: RelationFormat],
     child: LogicalPlan) extends UnaryNode {
   override def references = Set.empty
   override def output = child.output
 }
 
-case class CreateExternalTable(
-    databaseName: Option[String],
-    tableName: String,
-    format: Option[Class[LogicalPlan]],
-    location: String) extends LeafNode {
-  override def references = Set.empty
-  override def output = Seq.empty
-}
-
 case class WriteToFile(
-    path: String,
+    path: PhysicalLocation,
+    format: Class[_ <: RelationFormat],
     child: LogicalPlan) extends UnaryNode {
   override def references = Set.empty
   override def output = child.output

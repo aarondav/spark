@@ -467,7 +467,7 @@ private[hive] object HiveQl {
 
       val (db, tableName) = extractDbNameTableName(tableNameParts)
 
-      InsertIntoCreatedTable(db, tableName, None, nodeToPlan(query))
+      InsertIntoCreatedTable(db, tableName, classOf[HiveMetastoreFormat], nodeToPlan(query))
 
     // If its not a "CREATE TABLE AS" like above then just pass it back to hive as a native command.
     case Token("TOK_CREATETABLE" | "TOK_CREATEEXTTABLE", _) => NativePlaceholder

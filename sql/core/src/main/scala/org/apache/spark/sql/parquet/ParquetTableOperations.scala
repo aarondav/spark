@@ -17,14 +17,14 @@
 
 package org.apache.spark.sql.parquet
 
-import scala.collection.JavaConversions._
-import scala.collection.mutable
-import scala.util.Try
-
 import java.io.IOException
 import java.lang.{Long => JLong}
 import java.text.SimpleDateFormat
 import java.util.{Date, List => JList}
+
+import scala.collection.mutable
+import scala.collection.JavaConversions._
+import scala.util.Try
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
@@ -41,7 +41,6 @@ import parquet.io.ParquetDecodingException
 import parquet.schema.MessageType
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Row}
 import org.apache.spark.sql.execution.{LeafNode, SparkPlan, UnaryNode}
 import org.apache.spark.{Logging, SerializableWritable, TaskContext}
@@ -72,7 +71,7 @@ case class ParquetTableScan(
 
     val conf: Configuration = ContextUtil.getConfiguration(job)
     val qualifiedPath = {
-      val path = new Path(relation.path)
+      val path = relation.location.asPath
       path.getFileSystem(conf).makeQualified(path)
     }
     NewFileInputFormat.addInputPath(job, qualifiedPath)
@@ -184,7 +183,7 @@ case class InsertIntoParquetTable(
     val conf = ContextUtil.getConfiguration(job)
     RowWriteSupport.setSchema(relation.output, conf)
 
-    val fspath = new Path(relation.path)
+    val fspath = relation.location.asPath
     val fs = fspath.getFileSystem(conf)
 
     if (overwrite) {
@@ -197,7 +196,7 @@ case class InsertIntoParquetTable(
               + s" to InsertIntoParquetTable:\n${e.toString}")
       }
     }
-    saveAsHadoopFile(childRdd, relation.path.toString, conf)
+    saveAsHadoopFile(childRdd, relation.location, conf)
 
     // We return the child RDD to allow chaining (alternatively, one could return nothing).
     childRdd
@@ -220,13 +219,13 @@ case class InsertIntoParquetTable(
    */
   private def saveAsHadoopFile(
       rdd: RDD[Row],
-      path: String,
+      location: HadoopDirectory,
       conf: Configuration) {
     val job = new Job(conf)
     val keyType = classOf[Void]
     job.setOutputKeyClass(keyType)
     job.setOutputValueClass(classOf[Row])
-    NewFileOutputFormat.setOutputPath(job, new Path(path))
+    NewFileOutputFormat.setOutputPath(job, location.asPath)
     val wrappedConf = new SerializableWritable(job.getConfiguration)
     val formatter = new SimpleDateFormat("yyyyMMddHHmm")
     val jobtrackerID = formatter.format(new Date())

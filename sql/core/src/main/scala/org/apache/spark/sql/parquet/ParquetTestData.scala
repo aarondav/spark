@@ -104,7 +104,7 @@ private[sql] object ParquetTestData {
   val testDir = Utils.createTempDir()
   val testFilterDir = Utils.createTempDir()
 
-  lazy val testData = new ParquetRelation(testDir.toURI.toString, None, TestSQLContext)
+  lazy val testData = new ParquetRelation(new HadoopDirectory(testDir.toURI.toString), new Configuration(), TestSQLContext)
 
   val testNestedSchema1 =
     // based on blogpost example, source:
@@ -204,9 +204,9 @@ private[sql] object ParquetTestData {
   val testNestedDir4 = Utils.createTempDir()
 
   lazy val testNestedData1 =
-    new ParquetRelation(testNestedDir1.toURI.toString, None, TestSQLContext)
+    new ParquetRelation(new HadoopDirectory(testNestedDir1.toURI.toString), new Configuration(), TestSQLContext)
   lazy val testNestedData2 =
-    new ParquetRelation(testNestedDir2.toURI.toString, None, TestSQLContext)
+    new ParquetRelation(new HadoopDirectory(testNestedDir2.toURI.toString), new Configuration(), TestSQLContext)
 
   def writeFile() = {
     testDir.delete()
