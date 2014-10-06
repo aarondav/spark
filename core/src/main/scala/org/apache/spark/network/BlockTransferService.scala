@@ -18,16 +18,18 @@
 package org.apache.spark.network
 
 import java.io.Closeable
-import java.nio.ByteBuffer
+
+import org.apache.spark.network.buffer.ManagedBuffer
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 
+import org.apache.spark.Logging
 import org.apache.spark.storage.StorageLevel
-
+import org.apache.spark.util.Utils
 
 private[spark]
-abstract class BlockTransferService extends Closeable {
+abstract class BlockTransferService extends Closeable with Logging {
 
   /**
    * Initialize the transfer service by giving it the BlockDataManager that can be used to fetch
@@ -80,22 +82,23 @@ abstract class BlockTransferService extends Closeable {
    * It is also only available after [[init]] is invoked.
    */
   def fetchBlockSync(hostName: String, port: Int, blockId: String): ManagedBuffer = {
+    logInfo("FETCH BLOCK SYNC: " + blockId)
     // A monitor for the thread to wait on.
     val lock = new Object
     @volatile var result: Either[ManagedBuffer, Throwable] = null
     fetchBlocks(hostName, port, Seq(blockId), new BlockFetchingListener {
       override def onBlockFetchFailure(blockId: String, exception: Throwable): Unit = {
+        logInfo("FETCH BLOCK FAIL: " + blockId, exception)
         lock.synchronized {
           result = Right(exception)
           lock.notify()
         }
       }
-      override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
+      override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = Utils.logUncaughtExceptions {
+        logInfo("FETCH BLOCK SUCCESS: " + blockId)
+
         lock.synchronized {
-          val ret = ByteBuffer.allocate(data.size.toInt)
-          ret.put(data.nioByteBuffer())
-          ret.flip()
-          result = Left(new NioManagedBuffer(ret))
+          result = Left(data)
           lock.notify()
         }
       }

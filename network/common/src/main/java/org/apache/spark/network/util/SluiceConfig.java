@@ -15,35 +15,37 @@
  * limitations under the License.
  */
 
-package org.apache.spark.network.netty
-
-import org.apache.spark.SparkConf
+package org.apache.spark.network.util;
 
 /**
- * A central location that tracks all the settings we exposed to users.
+ * A central location that tracks all the settings we expose to users.
  */
-private[spark]
-class NettyConfig(conf: SparkConf) {
+public class SluiceConfig {
+  private final ConfigProvider conf;
 
-  /** Port the server listens on. Default to a random port. */
-  private[netty] val serverPort = conf.getInt("spark.shuffle.io.port", 0)
-
-  /** IO mode: nio, oio, epoll, or auto (try epoll first and then nio). */
-  private[netty] val ioMode = conf.get("spark.shuffle.io.mode", "nio").toLowerCase
-
-  /** Connect timeout in secs. Default 120 secs. */
-  private[netty] val connectTimeoutMs = {
-    conf.getInt("spark.shuffle.io.connectionTimeout", 120) * 1000
+  public SluiceConfig(ConfigProvider conf) {
+    this.conf = conf;
   }
 
-  /** Requested maximum length of the queue of incoming connections. */
-  private[netty] val backLog: Option[Int] = conf.getOption("spark.shuffle.io.backLog").map(_.toInt)
+  /** Port the server listens on. Default to a random port. */
+  public int serverPort() { return conf.getInt("spark.shuffle.io.port", 0); }
+
+  /** IO mode: nio, epoll, or auto (try epoll first and then nio). */
+  public String ioMode() { return conf.get("spark.shuffle.io.mode", "NIO").toUpperCase(); }
+
+  /** Connect timeout in secs. Default 120 secs. */
+  public int connectionTimeoutMs() {
+    return conf.getInt("spark.shuffle.io.connectionTimeout", 120) * 1000;
+  }
+
+  /** Requested maximum length of the queue of incoming connections. Default -1 for no backlog. */
+  public int backLog() { return conf.getInt("spark.shuffle.io.backLog", -1); }
 
   /** Number of threads used in the server thread pool. Default to 0, which is 2x#cores. */
-  private[netty] val serverThreads: Int = conf.getInt("spark.shuffle.io.serverThreads", 0)
+  public int serverThreads() { return conf.getInt("spark.shuffle.io.serverThreads", 0); }
 
   /** Number of threads used in the client thread pool. Default to 0, which is 2x#cores. */
-  private[netty] val clientThreads: Int = conf.getInt("spark.shuffle.io.clientThreads", 0)
+  public int clientThreads() { return conf.getInt("spark.shuffle.io.clientThreads", 0); }
 
   /**
    * Receive buffer size (SO_RCVBUF).
@@ -52,10 +54,8 @@ class NettyConfig(conf: SparkConf) {
    * Assuming latency = 1ms, network_bandwidth = 10Gbps
    *  buffer size should be ~ 1.25MB
    */
-  private[netty] val receiveBuf: Option[Int] =
-    conf.getOption("spark.shuffle.io.receiveBuffer").map(_.toInt)
+  public int receiveBuf() { return conf.getInt("spark.shuffle.io.receiveBuffer", -1); }
 
   /** Send buffer size (SO_SNDBUF). */
-  private[netty] val sendBuf: Option[Int] =
-    conf.getOption("spark.shuffle.io.sendBuffer").map(_.toInt)
+  public int sendBuf() { return conf.getInt("spark.shuffle.io.sendBuffer", -1); }
 }

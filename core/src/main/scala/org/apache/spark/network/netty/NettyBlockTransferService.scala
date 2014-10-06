@@ -17,38 +17,39 @@
 
 package org.apache.spark.network.netty
 
+import java.nio.{BufferUnderflowException, ByteBuffer}
+import java.util
+
+import com.google.common.primitives.Longs
+import org.apache.spark.network._
+import org.apache.spark.serializer.{JavaSerializer, Serializer}
+import org.apache.spark.network.buffer.ManagedBuffer
+import org.apache.spark.network.server.{DefaultStreamManager, StreamManager, SluiceServer}
+import org.apache.spark.network._
+import org.apache.spark.network.client.{SluiceClientFactory, SluiceClient}
+import org.apache.spark.network.util.{SluiceConfig, ConfigProvider}
+import org.apache.spark.storage.{BlockId, StorageLevel}
+import org.apache.spark.util.{ByteBufferInputStream, Utils}
+import org.apache.spark.{Logging, SparkConf, SparkEnv}
+
+import scala.collection.JavaConversions._
 import scala.concurrent.Future
 
-import org.apache.spark.SparkConf
-import org.apache.spark.network._
-import org.apache.spark.storage.StorageLevel
+class NettyBlockTransferService(conf: SparkConf) extends BlockTransferService {
+  var client: SluiceClient = _
 
+  val serializer = new JavaSerializer(conf) // TODO!!
+  private[this] val sluiceConf = new SluiceConfig(
+    new ConfigProvider { override def get(name: String) = conf.get(name) })
 
-/**
- * A [[BlockTransferService]] implementation based on Netty.
- *
- * See protocol.scala for the communication protocol between server and client
- */
-private[spark]
-final class NettyBlockTransferService(conf: SparkConf) extends BlockTransferService {
-
-  private[this] val nettyConf: NettyConfig = new NettyConfig(conf)
-
-  private[this] var server: BlockServer = _
-  private[this] var clientFactory: BlockClientFactory = _
+  private[this] var server: SluiceServer = _
+  private[this] var clientFactory: SluiceClientFactory = _
 
   override def init(blockDataManager: BlockDataManager): Unit = {
-    server = new BlockServer(nettyConf, blockDataManager)
-    clientFactory = new BlockClientFactory(nettyConf)
-  }
-
-  override def close(): Unit = {
-    if (server != null) {
-      server.close()
-    }
-    if (clientFactory != null) {
-      clientFactory.close()
-    }
+    val streamManager = new DefaultStreamManager
+    val rpcHandler = new NettyBlockRpcServer(serializer, streamManager, blockDataManager)
+    server = new SluiceServer(sluiceConf, streamManager, rpcHandler)
+    clientFactory = new SluiceClientFactory(sluiceConf)
   }
 
   override def fetchBlocks(
@@ -56,29 +57,15 @@ final class NettyBlockTransferService(conf: SparkConf) extends BlockTransferServ
       port: Int,
       blockIds: Seq[String],
       listener: BlockFetchingListener): Unit = {
-    clientFactory.createClient(hostName, port).fetchBlocks(blockIds, listener)
+    val client = clientFactory.createClient(hostName, port)
+    new NettyBlockFetcher(serializer, client, blockIds, listener)
   }
 
-  override def uploadBlock(
-      hostname: String,
-      port: Int,
-      blockId: String,
-      blockData: ManagedBuffer,
-      level: StorageLevel): Future[Unit] = {
-    clientFactory.createClient(hostName, port).uploadBlock(blockId, blockData, level)
-  }
+  override def hostName: String = Utils.localHostName()
 
-  override def hostName: String = {
-    if (server == null) {
-      throw new IllegalStateException("Server has not been started")
-    }
-    server.hostName
-  }
+  override def port: Int = server.getPort
 
-  override def port: Int = {
-    if (server == null) {
-      throw new IllegalStateException("Server has not been started")
-    }
-    server.port
-  }
+  override def uploadBlock(hostname: String, port: Int, blockId: String, blockData: ManagedBuffer, level: StorageLevel): Future[Unit] = ???
+
+  override def close(): Unit = server.close()
 }

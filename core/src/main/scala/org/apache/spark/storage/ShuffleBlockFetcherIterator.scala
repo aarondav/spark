@@ -19,14 +19,13 @@ package org.apache.spark.storage
 
 import java.util.concurrent.LinkedBlockingQueue
 
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.HashSet
-import scala.collection.mutable.Queue
-
-import org.apache.spark.{Logging, TaskContext}
-import org.apache.spark.network.{ManagedBuffer, BlockFetchingListener, BlockTransferService}
+import org.apache.spark.network.{BlockFetchingListener, BlockTransferService}
 import org.apache.spark.serializer.Serializer
+import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.util.{CompletionIterator, Utils}
+import org.apache.spark.{Logging, TaskContext}
+
+import scala.collection.mutable.{ArrayBuffer, HashSet, Queue}
 
 
 /**
@@ -58,7 +57,7 @@ final class ShuffleBlockFetcherIterator(
     maxBytesInFlight: Long)
   extends Iterator[(BlockId, Option[Iterator[Any]])] with Logging {
 
-  import ShuffleBlockFetcherIterator._
+  import org.apache.spark.storage.ShuffleBlockFetcherIterator._
 
   /**
    * Total number of blocks to fetch. This can be smaller than the total number of blocks
@@ -151,6 +150,7 @@ final class ShuffleBlockFetcherIterator(
             // Increment the ref count because we need to pass this to a different thread.
             // This needs to be released after use.
             buf.retain()
+            println(s"[[EXPECTED SIZE: ${sizeMap(blockId)}, ACTUAL SIZE: ${buf.size()}]]")
             results.put(new FetchResult(BlockId(blockId), sizeMap(blockId), buf))
             shuffleMetrics.remoteBytesRead += buf.size
             shuffleMetrics.remoteBlocksFetched += 1
@@ -159,6 +159,7 @@ final class ShuffleBlockFetcherIterator(
         }
 
         override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
+          // TODO: Stream may be invalidated!
           logError(s"Failed to get block(s) from ${req.address.host}:${req.address.port}", e)
           results.put(new FetchResult(BlockId(blockId), -1, null))
         }
@@ -227,7 +228,7 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val blockId = iter.next()
       try {
-        val buf = blockManager.getBlockData(blockId.toString)
+        val buf = blockManager.getBlockData(blockId)
         shuffleMetrics.localBlocksFetched += 1
         buf.retain()
         results.put(new FetchResult(blockId, 0, buf))

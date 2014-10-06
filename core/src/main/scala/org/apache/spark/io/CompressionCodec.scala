@@ -63,7 +63,7 @@ private[spark] object CompressionCodec {
     ctor.newInstance(conf).asInstanceOf[CompressionCodec]
   }
 
-  val DEFAULT_COMPRESSION_CODEC = "snappy"
+  val DEFAULT_COMPRESSION_CODEC = "lzf"
   val ALL_COMPRESSION_CODECS = shortCompressionCodecNames.values.toSeq
 }
 

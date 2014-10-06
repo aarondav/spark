@@ -17,15 +17,15 @@
 
 package org.apache.spark.network
 
-class BlockFetchFailureException(blockId: String, errorMsg: String, cause: Throwable)
+class ChunkFetchFailureException(chunkIndex: Int, errorMsg: String, cause: Throwable)
   extends Exception(errorMsg, cause) {
 
-  def this(blockId: String, errorMsg: String) = this(blockId, errorMsg, null)
+  def this(chunkIndex: Int, errorMsg: String) = this(chunkIndex, errorMsg, null)
 }
 
 
-class BlockUploadFailureException(blockId: String, cause: Throwable)
-  extends Exception(s"Failed to fetch block $blockId", cause) {
-
-  def this(blockId: String) = this(blockId, null)
-}
+//class BlockUploadFailureException(blockId: String, cause: Throwable)
+//  extends Exception(s"Failed to fetch block $blockId", cause) {
+//
+//  def this(blockId: String) = this(blockId, null)
+//}
