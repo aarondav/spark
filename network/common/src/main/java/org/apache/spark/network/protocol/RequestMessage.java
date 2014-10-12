@@ -15,18 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.spark.network.server;
+package org.apache.spark.network.protocol;
 
-import org.apache.spark.network.client.RpcResponseCallback;
-import org.apache.spark.network.client.SluiceClient;
-
-/**
- * Handler for sendRPC() messages sent by {@link org.apache.spark.network.client.SluiceClient}s.
- */
-public interface RpcHandler {
-  /**
-   * Receive a single RPC message. Any exception thrown while in this method will be sent back to
-   * the client in string form as a standard RPC failure.
-   */
-  void receive(SluiceClient client, byte[] message, RpcResponseCallback callback);
+/** Messages from the client to the server. */
+public interface RequestMessage extends Message {
 }

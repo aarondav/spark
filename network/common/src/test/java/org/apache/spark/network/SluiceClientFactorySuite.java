@@ -29,6 +29,7 @@ import static org.junit.Assert.assertTrue;
 import org.apache.spark.network.client.SluiceClient;
 import org.apache.spark.network.client.SluiceClientFactory;
 import org.apache.spark.network.server.DefaultStreamManager;
+import org.apache.spark.network.server.MessageDispatcherFactory;
 import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.server.SluiceServer;
 import org.apache.spark.network.server.StreamManager;
@@ -38,6 +39,7 @@ import org.apache.spark.network.util.SluiceConfig;
 
 public class SluiceClientFactorySuite {
   private SluiceConfig conf;
+  private MessageDispatcherFactory dispatcherFactory;
   private SluiceServer server1;
   private SluiceServer server2;
 
@@ -46,8 +48,9 @@ public class SluiceClientFactorySuite {
     conf = new SluiceConfig(new DefaultConfigProvider());
     StreamManager streamManager = new DefaultStreamManager();
     RpcHandler rpcHandler = new NoOpRpcHandler();
-    server1 = new SluiceServer(conf, streamManager, rpcHandler);
-    server2 = new SluiceServer(conf, streamManager, rpcHandler);
+    dispatcherFactory = new MessageDispatcherFactory(streamManager, rpcHandler);
+    server1 = new SluiceServer(conf, dispatcherFactory);
+    server2 = new SluiceServer(conf, dispatcherFactory);
   }
 
   @After
@@ -58,7 +61,7 @@ public class SluiceClientFactorySuite {
 
   @Test
   public void createAndReuseBlockClients() throws TimeoutException {
-    SluiceClientFactory factory = new SluiceClientFactory(conf);
+    SluiceClientFactory factory = new SluiceClientFactory(conf, dispatcherFactory);
     SluiceClient c1 = factory.createClient(TestUtils.getLocalHost(), server1.getPort());
     SluiceClient c2 = factory.createClient(TestUtils.getLocalHost(), server1.getPort());
     SluiceClient c3 = factory.createClient(TestUtils.getLocalHost(), server2.getPort());
@@ -71,7 +74,7 @@ public class SluiceClientFactorySuite {
 
   @Test
   public void neverReturnInactiveClients() throws Exception {
-    SluiceClientFactory factory = new SluiceClientFactory(conf);
+    SluiceClientFactory factory = new SluiceClientFactory(conf, dispatcherFactory);
     SluiceClient c1 = factory.createClient(TestUtils.getLocalHost(), server1.getPort());
     c1.close();
 
@@ -89,7 +92,7 @@ public class SluiceClientFactorySuite {
 
   @Test
   public void closeBlockClientsWithFactory() throws TimeoutException {
-    SluiceClientFactory factory = new SluiceClientFactory(conf);
+    SluiceClientFactory factory = new SluiceClientFactory(conf, dispatcherFactory);
     SluiceClient c1 = factory.createClient(TestUtils.getLocalHost(), server1.getPort());
     SluiceClient c2 = factory.createClient(TestUtils.getLocalHost(), server2.getPort());
     assertTrue(c1.isActive());

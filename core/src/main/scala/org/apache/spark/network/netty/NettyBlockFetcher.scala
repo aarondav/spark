@@ -20,9 +20,9 @@ package org.apache.spark.network.netty
 import java.nio.ByteBuffer
 import java.util
 
-import org.apache.spark.Logging
+import org.apache.spark.{SparkConf, Logging}
 import org.apache.spark.network.BlockFetchingListener
-import org.apache.spark.serializer.Serializer
+import org.apache.spark.serializer.{JavaSerializer, Serializer}
 import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.network.client.{RpcResponseCallback, ChunkReceivedCallback, SluiceClient}
 import org.apache.spark.storage.BlockId
@@ -63,6 +63,13 @@ class NettyBlockFetcher(
       }
     }
   }
+
+//  client.sendRpc(
+//    new JavaSerializer(new SparkConf()).newInstance().serialize(new Echo("Hello world!")).array(),
+//    new RpcResponseCallback {
+//      override def onFailure(e: Throwable): Unit = println("Received fundamental failure: " + e)
+//      override def onSuccess(response: Array[Byte]): Unit = println("Received fundamental success")
+//    })
 
   // Send the RPC to open the given set of blocks. This will return a ShuffleStreamHandle.
   client.sendRpc(ser.serialize(OpenBlocks(blockIds.map(BlockId.apply))).array(),

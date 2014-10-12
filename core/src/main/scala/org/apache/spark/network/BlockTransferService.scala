@@ -25,7 +25,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 
 import org.apache.spark.Logging
-import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.{BlockId, StorageLevel}
 import org.apache.spark.util.Utils
 
 private[spark]
@@ -72,7 +72,7 @@ abstract class BlockTransferService extends Closeable with Logging {
   def uploadBlock(
       hostname: String,
       port: Int,
-      blockId: String,
+      blockId: BlockId,
       blockData: ManagedBuffer,
       level: StorageLevel): Future[Unit]
 
@@ -126,7 +126,7 @@ abstract class BlockTransferService extends Closeable with Logging {
   def uploadBlockSync(
       hostname: String,
       port: Int,
-      blockId: String,
+      blockId: BlockId,
       blockData: ManagedBuffer,
       level: StorageLevel): Unit = {
     Await.result(uploadBlock(hostname, port, blockId, blockData, level), Duration.Inf)

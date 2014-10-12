@@ -22,12 +22,16 @@ import java.util.Arrays;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.RequestMessage;
+
 /**
  * A generic RPC which is handled by a remote {@link org.apache.spark.network.server.RpcHandler}.
- * This will correspond to a single {@link org.apache.spark.network.protocol.response.ServerResponse}
+ * This will correspond to a single {@link org.apache.spark.network.protocol.Message}
  * (either success or failure).
  */
-public final class RpcRequest implements ClientRequest {
+public final class RpcRequest implements RequestMessage {
   /** Tag is used to link an RPC request with its response. */
   public final long tag;
 
@@ -40,7 +44,7 @@ public final class RpcRequest implements ClientRequest {
   }
 
   @Override
-  public Type type() { return Type.RpcRequest; }
+  public MessageType type() { return MessageType.RpcRequest; }
 
   @Override
   public int encodedLength() {

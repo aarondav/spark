@@ -37,8 +37,12 @@ import io.netty.util.internal.PlatformDependent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.protocol.request.ClientRequestEncoder;
-import org.apache.spark.network.protocol.response.ServerResponseDecoder;
+import org.apache.spark.network.protocol.response.MessageDecoder;
+import org.apache.spark.network.protocol.response.MessageEncoder;
+import org.apache.spark.network.server.MessageDispatcher;
+import org.apache.spark.network.server.MessageDispatcherFactory;
+import org.apache.spark.network.server.RpcHandler;
+import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.util.IOMode;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.SluiceConfig;
@@ -54,18 +58,20 @@ public class SluiceClientFactory implements Closeable {
   private final Logger logger = LoggerFactory.getLogger(SluiceClientFactory.class);
 
   private final SluiceConfig conf;
-  private final Map<SocketAddress, SluiceClient> connectionPool;
-  private final ClientRequestEncoder encoder;
-  private final ServerResponseDecoder decoder;
+  private final MessageDispatcherFactory dispatcherFactory;
+  private final ConcurrentHashMap<SocketAddress, SluiceClient> connectionPool;
+  private final MessageEncoder encoder;
+  private final MessageDecoder decoder;
 
   private final Class<? extends Channel> socketChannelClass;
   private final EventLoopGroup workerGroup;
 
-  public SluiceClientFactory(SluiceConfig conf) {
+  public SluiceClientFactory(SluiceConfig conf, MessageDispatcherFactory dispatcherFactory) {
     this.conf = conf;
+    this.dispatcherFactory = dispatcherFactory;
     this.connectionPool = new ConcurrentHashMap<SocketAddress, SluiceClient>();
-    this.encoder = new ClientRequestEncoder();
-    this.decoder = new ServerResponseDecoder();
+    this.encoder = new MessageEncoder();
+    this.decoder = new MessageDecoder();
 
     IOMode ioMode = IOMode.valueOf(conf.ioMode());
     this.socketChannelClass = NettyUtils.getClientChannelClass(ioMode);
@@ -82,17 +88,16 @@ public class SluiceClientFactory implements Closeable {
   public SluiceClient createClient(String remoteHost, int remotePort) throws TimeoutException {
     // Get connection from the connection pool first.
     // If it is not found or not active, create a new one.
-    InetSocketAddress address = new InetSocketAddress(remoteHost, remotePort);
+    final InetSocketAddress address = new InetSocketAddress(remoteHost, remotePort);
     SluiceClient cachedClient = connectionPool.get(address);
     if (cachedClient != null && cachedClient.isActive()) {
       return cachedClient;
+    } else if (cachedClient != null) {
+      // Remove the inactive client.
+      connectionPool.remove(address, cachedClient);
     }
 
     logger.debug("Creating new connection to " + address);
-
-    // There is a chance two threads are creating two different clients connecting to the same host.
-    // But that's probably ok, as long as the caller hangs on to their client for a single stream.
-    final SluiceClientHandler handler = new SluiceClientHandler();
 
     Bootstrap bootstrap = new Bootstrap();
     bootstrap.group(workerGroup)
@@ -108,11 +113,20 @@ public class SluiceClientFactory implements Closeable {
     bootstrap.handler(new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) {
+        MessageDispatcher dispatcher = dispatcherFactory.createDispatcher(ch);
         ch.pipeline()
-            .addLast("clientRequestEncoder", encoder)
-            .addLast("frameDecoder", NettyUtils.createFrameDecoder())
-            .addLast("serverResponseDecoder", decoder)
-            .addLast("handler", handler);
+          .addLast("encoder", encoder)
+          .addLast("frameDecoder", NettyUtils.createFrameDecoder())
+          .addLast("decoder", decoder)
+          .addLast("handler", dispatcher);
+
+        SluiceClient oldClient = connectionPool.putIfAbsent(address, dispatcher.getClient());
+        if (oldClient != null) {
+          logger.info("Two clients were created simultaneously, second one will be disposed.");
+          ch.close();
+          // Note: this type of failure is still considered a success by Netty, and thus the
+          // ChannelFuture will complete successfully.
+        }
       }
     });
 
@@ -123,8 +137,8 @@ public class SluiceClientFactory implements Closeable {
           String.format("Connecting to %s timed out (%s ms)", address, conf.connectionTimeoutMs()));
     }
 
-    SluiceClient client = new SluiceClient(cf, handler);
-    connectionPool.put(address, client);
+    SluiceClient client = connectionPool.get(address);
+    assert client != null;
     return client;
   }
 

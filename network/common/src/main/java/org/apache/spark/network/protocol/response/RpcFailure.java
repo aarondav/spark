@@ -20,8 +20,12 @@ package org.apache.spark.network.protocol.response;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.ResponseMessage;
+
 /** Response to {@link org.apache.spark.network.protocol.request.RpcRequest} for a failed RPC. */
-public final class RpcFailure implements ServerResponse {
+public final class RpcFailure implements ResponseMessage {
   public final long tag;
   public final String errorString;
 
@@ -31,7 +35,7 @@ public final class RpcFailure implements ServerResponse {
   }
 
   @Override
-  public Type type() { return Type.RpcFailure; }
+  public MessageType type() { return MessageType.RpcFailure; }
 
   @Override
   public int encodedLength() {

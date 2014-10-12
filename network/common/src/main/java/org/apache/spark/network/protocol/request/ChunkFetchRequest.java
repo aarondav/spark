@@ -20,13 +20,16 @@ package org.apache.spark.network.protocol.request;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.RequestMessage;
 import org.apache.spark.network.protocol.StreamChunkId;
 
 /**
  * Request to fetch a sequence of a single chunk of a stream. This will correspond to a single
- * {@link org.apache.spark.network.protocol.response.ServerResponse} (either success or failure).
+ * {@link org.apache.spark.network.protocol.Message} (either success or failure).
  */
-public final class ChunkFetchRequest implements ClientRequest {
+public final class ChunkFetchRequest implements RequestMessage {
   public final StreamChunkId streamChunkId;
 
   public ChunkFetchRequest(StreamChunkId streamChunkId) {
@@ -34,7 +37,7 @@ public final class ChunkFetchRequest implements ClientRequest {
   }
 
   @Override
-  public Type type() { return Type.ChunkFetchRequest; }
+  public MessageType type() { return MessageType.ChunkFetchRequest; }
 
   @Override
   public int encodedLength() {

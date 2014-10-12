@@ -30,8 +30,8 @@ import io.netty.channel.socket.SocketChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.protocol.request.ClientRequestDecoder;
-import org.apache.spark.network.protocol.response.ServerResponseEncoder;
+import org.apache.spark.network.protocol.response.MessageDecoder;
+import org.apache.spark.network.protocol.response.MessageEncoder;
 import org.apache.spark.network.util.IOMode;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.SluiceConfig;
@@ -43,17 +43,15 @@ public class SluiceServer implements Closeable {
   private final Logger logger = LoggerFactory.getLogger(SluiceServer.class);
 
   private final SluiceConfig conf;
-  private final StreamManager streamManager;
-  private final RpcHandler rpcHandler;
+  private final MessageDispatcherFactory dispatcherFactory;
 
   private ServerBootstrap bootstrap;
   private ChannelFuture channelFuture;
   private int port;
 
-  public SluiceServer(SluiceConfig conf, StreamManager streamManager, RpcHandler rpcHandler) {
+  public SluiceServer(SluiceConfig conf, MessageDispatcherFactory dispatcherFactory) {
     this.conf = conf;
-    this.streamManager = streamManager;
-    this.rpcHandler = rpcHandler;
+    this.dispatcherFactory = dispatcherFactory;
 
     init();
   }
@@ -85,17 +83,27 @@ public class SluiceServer implements Closeable {
       bootstrap.childOption(ChannelOption.SO_SNDBUF, conf.sendBuf());
     }
 
+
+    // MessageDispatcher (one per channel) - SluiceClient, SluiceClientHandler, SluiceServerHandler
+    // SluiceClientFactory (input: address)
+    // SluiceServerPipelineFactory (input: Channel)
+
+    // SluiceClient --- sendRPC --> SluiceServerHandler
+    // SluiceServerHandler <-- sendRPC --- SluiceServer
+    // SluiceClient --- sendRPC --> SluiceServer
+
+
     bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
 
       @Override
       protected void initChannel(SocketChannel ch) throws Exception {
         ch.pipeline()
           .addLast("frameDecoder", NettyUtils.createFrameDecoder())
-          .addLast("clientRequestDecoder", new ClientRequestDecoder())
-          .addLast("serverResponseEncoder", new ServerResponseEncoder())
+          .addLast("decoder", new MessageDecoder())
+          .addLast("encoder", new MessageEncoder())
           // NOTE: Chunks are currently guaranteed to be returned in the order of request, but this
           // would require more logic to guarantee if this were not part of the same event loop.
-          .addLast("handler", new SluiceServerHandler(streamManager, rpcHandler));
+          .addLast("handler", dispatcherFactory.createDispatcher(ch));
       }
     });
 

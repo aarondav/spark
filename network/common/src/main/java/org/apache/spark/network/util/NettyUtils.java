@@ -101,6 +101,13 @@ public class NettyUtils {
     return new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 8, -8, 8);
   }
 
+  public static String getRemoteAddress(Channel channel) {
+    if (channel != null && channel.remoteAddress() != null) {
+      return channel.remoteAddress().toString();
+    }
+    return "<unknown remote>";
+  }
+
   /** Returns EPOLL if it's available on this system, NIO otherwise. */
   private static IOMode autoselectMode() {
     return Epoll.isAvailable() ? IOMode.EPOLL : IOMode.NIO;

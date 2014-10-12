@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.network.protocol.request;
+package org.apache.spark.network.protocol.response;
 
 import java.util.List;
 
@@ -24,34 +24,48 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToMessageDecoder;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.request.ChunkFetchRequest;
+import org.apache.spark.network.protocol.request.RpcRequest;
+
 /**
- * Decoder in the server side to decode client requests.
- * This decoder is stateless so it is safe to be shared by multiple threads.
- *
- * This assumes the inbound messages have been processed by a frame decoder created by
- * {@link org.apache.spark.network.util.NettyUtils#createFrameDecoder()}.
+ * Decoder used by the client side to encode server-to-client responses.
+ * This encoder is stateless so it is safe to be shared by multiple threads.
  */
 @ChannelHandler.Sharable
-public final class ClientRequestDecoder extends MessageToMessageDecoder<ByteBuf> {
+public final class MessageDecoder extends MessageToMessageDecoder<ByteBuf> {
 
   @Override
   public void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
-    ClientRequest.Type msgType = ClientRequest.Type.decode(in);
-    ClientRequest decoded = decode(msgType, in);
+    MessageType msgType = MessageType.decode(in);
+    Message decoded = decode(msgType, in);
     assert decoded.type() == msgType;
-    assert in.readableBytes() == 0;
     out.add(decoded);
   }
 
-  private ClientRequest decode(ClientRequest.Type msgType, ByteBuf in) {
+  private Message decode(MessageType msgType, ByteBuf in) {
     switch (msgType) {
       case ChunkFetchRequest:
         return ChunkFetchRequest.decode(in);
 
+      case ChunkFetchSuccess:
+        return ChunkFetchSuccess.decode(in);
+
+      case ChunkFetchFailure:
+        return ChunkFetchFailure.decode(in);
+
       case RpcRequest:
         return RpcRequest.decode(in);
 
-      default: throw new IllegalArgumentException("Unexpected message type: " + msgType);
+      case RpcResponse:
+        return RpcResponse.decode(in);
+
+      case RpcFailure:
+        return RpcFailure.decode(in);
+
+      default:
+        throw new IllegalArgumentException("Unexpected message type: " + msgType);
     }
   }
 }

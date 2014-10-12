@@ -20,6 +20,8 @@ package org.apache.spark.network.client;
 import java.io.Closeable;
 import java.util.UUID;
 
+import com.google.common.base.Preconditions;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import org.slf4j.Logger;
@@ -50,7 +52,7 @@ import org.apache.spark.network.protocol.request.RpcRequest;
  * may be used for multiple streams, but any given stream must be restricted to a single client,
  * in order to avoid out-of-order responses.
  *
- * NB: This class is used to make requests to the server, while {@link SluiceClientHandler} is
+ * NB: This class is used to make requests to the server, while {@link SluiceResponseHandler} is
  * responsible for handling responses from the server.
  *
  * Concurrency: thread safe and can be called from multiple threads.
@@ -58,24 +60,24 @@ import org.apache.spark.network.protocol.request.RpcRequest;
 public class SluiceClient implements Closeable {
   private final Logger logger = LoggerFactory.getLogger(SluiceClient.class);
 
-  private final ChannelFuture cf;
-  private final SluiceClientHandler handler;
+  private final Channel channel;
+  private final SluiceResponseHandler handler;
 
   private final String serverAddr;
 
-  SluiceClient(ChannelFuture cf, SluiceClientHandler handler) {
-    this.cf = cf;
-    this.handler = handler;
+  public SluiceClient(Channel channel, SluiceResponseHandler handler) {
+    this.channel = Preconditions.checkNotNull(channel);
+    this.handler = Preconditions.checkNotNull(handler);
 
-    if (cf != null && cf.channel() != null && cf.channel().remoteAddress() != null) {
-      serverAddr = cf.channel().remoteAddress().toString();
+    if (channel.remoteAddress() != null) {
+      serverAddr = channel.remoteAddress().toString();
     } else {
       serverAddr = "<unknown address>";
     }
   }
 
   public boolean isActive() {
-    return cf.channel().isActive();
+    return channel.isActive();
   }
 
   /**
@@ -103,7 +105,7 @@ public class SluiceClient implements Closeable {
     final StreamChunkId streamChunkId = new StreamChunkId(streamId, chunkIndex);
     handler.addFetchRequest(streamChunkId, callback);
 
-    cf.channel().writeAndFlush(new ChunkFetchRequest(streamChunkId)).addListener(
+    channel.writeAndFlush(new ChunkFetchRequest(streamChunkId)).addListener(
       new ChannelFutureListener() {
         @Override
         public void operationComplete(ChannelFuture future) throws Exception {
@@ -116,7 +118,6 @@ public class SluiceClient implements Closeable {
             String errorMsg = String.format("Failed to send request %s to %s: %s", streamChunkId,
               serverAddr, future.cause().getMessage());
             logger.error(errorMsg, future.cause());
-            future.cause().printStackTrace();
             handler.removeFetchRequest(streamChunkId);
             callback.onFailure(chunkIndex, new RuntimeException(errorMsg));
           }
@@ -135,7 +136,7 @@ public class SluiceClient implements Closeable {
     final long tag = UUID.randomUUID().getLeastSignificantBits();
     handler.addRpcRequest(tag, callback);
 
-    cf.channel().writeAndFlush(new RpcRequest(tag, message)).addListener(
+    channel.writeAndFlush(new RpcRequest(tag, message)).addListener(
       new ChannelFutureListener() {
         @Override
         public void operationComplete(ChannelFuture future) throws Exception {
@@ -156,6 +157,6 @@ public class SluiceClient implements Closeable {
 
   @Override
   public void close() {
-    cf.channel().close();
+    channel.close();
   }
 }

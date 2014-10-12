@@ -22,8 +22,12 @@ import java.util.Arrays;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.ResponseMessage;
+
 /** Response to {@link org.apache.spark.network.protocol.request.RpcRequest} for a successful RPC. */
-public final class RpcResponse implements ServerResponse {
+public final class RpcResponse implements ResponseMessage {
   public final long tag;
   public final byte[] response;
 
@@ -33,7 +37,7 @@ public final class RpcResponse implements ServerResponse {
   }
 
   @Override
-  public Type type() { return Type.RpcResponse; }
+  public MessageType type() { return MessageType.RpcResponse; }
 
   @Override
   public int encodedLength() { return 8 + 4 + response.length; }

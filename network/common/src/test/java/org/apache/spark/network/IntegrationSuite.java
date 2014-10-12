@@ -43,6 +43,7 @@ import org.apache.spark.network.buffer.NioManagedBuffer;
 import org.apache.spark.network.client.ChunkReceivedCallback;
 import org.apache.spark.network.client.SluiceClient;
 import org.apache.spark.network.client.SluiceClientFactory;
+import org.apache.spark.network.server.MessageDispatcherFactory;
 import org.apache.spark.network.server.SluiceServer;
 import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.util.DefaultConfigProvider;
@@ -94,8 +95,10 @@ public class IntegrationSuite {
         }
       }
     };
-    server = new SluiceServer(conf, streamManager, new NoOpRpcHandler());
-    clientFactory = new SluiceClientFactory(conf);
+    MessageDispatcherFactory dispatcherFactory = new MessageDispatcherFactory(streamManager,
+      new NoOpRpcHandler());
+    server = new SluiceServer(conf, dispatcherFactory);
+    clientFactory = new SluiceClientFactory(conf, dispatcherFactory);
   }
 
   @AfterClass

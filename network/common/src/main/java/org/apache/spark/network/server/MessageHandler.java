@@ -17,16 +17,15 @@
 
 package org.apache.spark.network.server;
 
-import org.apache.spark.network.client.RpcResponseCallback;
-import org.apache.spark.network.client.SluiceClient;
+import io.netty.channel.ChannelHandlerContext;
+
+import org.apache.spark.network.protocol.Message;
 
 /**
- * Handler for sendRPC() messages sent by {@link org.apache.spark.network.client.SluiceClient}s.
+ * Created by aaron on 10/12/14.
  */
-public interface RpcHandler {
-  /**
-   * Receive a single RPC message. Any exception thrown while in this method will be sent back to
-   * the client in string form as a standard RPC failure.
-   */
-  void receive(SluiceClient client, byte[] message, RpcResponseCallback callback);
+public abstract class MessageHandler<T extends Message> {
+  public abstract void handle(T message);
+  public abstract void exceptionCaught(Throwable cause);
+  public abstract void channelUnregistered();
 }

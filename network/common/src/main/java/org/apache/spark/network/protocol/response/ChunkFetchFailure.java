@@ -20,13 +20,16 @@ package org.apache.spark.network.protocol.response;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
+import org.apache.spark.network.protocol.Message;
+import org.apache.spark.network.protocol.MessageType;
+import org.apache.spark.network.protocol.ResponseMessage;
 import org.apache.spark.network.protocol.StreamChunkId;
 
 /**
  * Response to {@link org.apache.spark.network.protocol.request.ChunkFetchRequest} when there is an
  * error fetching the chunk.
  */
-public final class ChunkFetchFailure implements ServerResponse {
+public final class ChunkFetchFailure implements ResponseMessage {
   public final StreamChunkId streamChunkId;
   public final String errorString;
 
@@ -36,7 +39,7 @@ public final class ChunkFetchFailure implements ServerResponse {
   }
 
   @Override
-  public Type type() { return Type.ChunkFetchFailure; }
+  public MessageType type() { return MessageType.ChunkFetchFailure; }
 
   @Override
   public int encodedLength() {

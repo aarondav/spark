@@ -20,21 +20,19 @@ package org.apache.spark.network.netty
 import org.apache.spark.SparkConf
 import org.apache.spark.network._
 import org.apache.spark.network.buffer.ManagedBuffer
-import org.apache.spark.network.client.{SluiceClient, SluiceClientFactory}
-import org.apache.spark.network.server.{DefaultStreamManager, SluiceServer}
+import org.apache.spark.network.client.{RpcResponseCallback, SluiceClient, SluiceClientFactory}
+import org.apache.spark.network.server._
 import org.apache.spark.network.util.{ConfigProvider, SluiceConfig}
 import org.apache.spark.serializer.JavaSerializer
-import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.{BlockId, StorageLevel}
 import org.apache.spark.util.Utils
 
-import scala.concurrent.Future
+import scala.concurrent.{Promise, Future}
 
 /**
  * A BlockTransferService that uses Netty to fetch a set of blocks at at time.
  */
 class NettyBlockTransferService(conf: SparkConf) extends BlockTransferService {
-  var client: SluiceClient = _
-
   // TODO: Don't use Java serialization, use a more cross-version compatible serialization format.
   val serializer = new JavaSerializer(conf)
 
@@ -48,8 +46,9 @@ class NettyBlockTransferService(conf: SparkConf) extends BlockTransferService {
   override def init(blockDataManager: BlockDataManager): Unit = {
     val streamManager = new DefaultStreamManager
     val rpcHandler = new NettyBlockRpcServer(serializer, streamManager, blockDataManager)
-    server = new SluiceServer(sluiceConf, streamManager, rpcHandler)
-    clientFactory = new SluiceClientFactory(sluiceConf)
+    val dispatcherFactory = new MessageDispatcherFactory(streamManager, rpcHandler)
+    server = new SluiceServer(sluiceConf, dispatcherFactory)
+    clientFactory = new SluiceClientFactory(sluiceConf, dispatcherFactory)
   }
 
   override def fetchBlocks(
@@ -65,13 +64,32 @@ class NettyBlockTransferService(conf: SparkConf) extends BlockTransferService {
 
   override def port: Int = server.getPort
 
-  // TODO: Implement
   override def uploadBlock(
       hostname: String,
       port: Int,
-      blockId: String,
+      blockId: BlockId,
       blockData: ManagedBuffer,
-      level: StorageLevel): Future[Unit] = ???
+      level: StorageLevel): Future[Unit] = {
+    val result = Promise[Unit]
+    val client = clientFactory.createClient(hostName, port)
+
+    val nioBuffer = blockData.nioByteBuffer()
+    val array = if (nioBuffer.hasArray) {
+      nioBuffer.array()
+    } else {
+      val data = new Array[Byte](nioBuffer.remaining())
+      nioBuffer.get(data)
+      data
+    }
+
+    client.sendRpc(serializer.newInstance().serialize(new org.apache.spark.network.netty.UploadBlock(blockId, array, level)).array(),
+      new RpcResponseCallback {
+        override def onFailure(e: Throwable): Unit = result.failure(e)
+        override def onSuccess(response: Array[Byte]): Unit = result.success()
+      })
+
+    result.future
+  }
 
   override def close(): Unit = server.close()
 }
