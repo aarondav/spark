@@ -81,6 +81,12 @@ public class SluiceResponseHandler extends MessageHandler<ResponseMessage> {
     }
     // It's OK if new fetches appear, as they will fail immediately.
     outstandingFetches.clear();
+
+    for (Map.Entry<Long, RpcResponseCallback> entry : outstandingRpcs.entrySet()) {
+      entry.getValue().onFailure(cause);
+    }
+    // It's OK if new fetches appear, as they will fail immediately.
+    outstandingRpcs.clear();
   }
 
   @Override

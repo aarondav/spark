@@ -53,28 +53,32 @@ class NettyBlockFetcher(
   val chunkCallback = new ChunkReceivedCallback {
     // On receipt of a chunk, pass it upwards as a block.
     def onSuccess(chunkIndex: Int, buffer: ManagedBuffer): Unit = Utils.logUncaughtExceptions {
+      logInfo(s"Success on stream index $streamHandle / chunk index $chunkIndex")
       listener.onBlockFetchSuccess(blockIds(chunkIndex), buffer)
     }
 
     // On receipt of a failure, fail every block from chunkIndex onwards.
     def onFailure(chunkIndex: Int, e: Throwable): Unit = {
+      logInfo(s"Failure to receive stream index $streamHandle / chunk index $chunkIndex", e)
       blockIds.drop(chunkIndex).foreach { blockId =>
         listener.onBlockFetchFailure(blockId, e);
       }
     }
   }
 
+  logInfo(s"Hello, beginning fetch for blocks " + blockIds)
   // Send the RPC to open the given set of blocks. This will return a ShuffleStreamHandle.
   client.sendRpc(ser.serialize(OpenBlocks(blockIds.map(BlockId.apply))).array(),
     new RpcResponseCallback {
       override def onSuccess(response: Array[Byte]): Unit = {
         try {
           streamHandle = ser.deserialize[ShuffleStreamHandle](ByteBuffer.wrap(response))
-          logTrace(s"Successfully opened block set: $streamHandle! Preparing to fetch chunks.")
+          logInfo(s"Successfully opened block set: $streamHandle! Preparing to fetch chunks.")
 
           // Immediately request all chunks -- we expect that the total size of the request is
           // reasonable due to higher level chunking in [[ShuffleBlockFetcherIterator]].
           for (i <- 0 until streamHandle.numChunks) {
+            logInfo(s"FETCHING stream index $streamHandle / chunk index $i")
             client.fetchChunk(streamHandle.streamId, i, chunkCallback)
           }
         } catch {
