@@ -23,6 +23,12 @@ import java.text.SimpleDateFormat
 import java.util.{UUID, Date}
 import java.util.concurrent.TimeUnit
 
+import org.apache.spark.network.util.SystemPropertyConfigProvider
+import org.apache.spark.network.TransportContext
+import org.apache.spark.network.server.TransportServer
+import org.apache.spark.network.shuffle.StandaloneShuffleBlockHandler
+import org.apache.spark.network.util.TransportConf
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable.HashMap
 import scala.concurrent.duration._
@@ -428,6 +434,17 @@ private[spark] object Worker extends Logging {
   def main(argStrings: Array[String]) {
     SignalLogger.register(log)
     val conf = new SparkConf
+
+    // Create external shuffle server
+    // TODO: Remove this before PR goes in -- this is just to demonstrate how it looks!
+    Utils.tryLog {
+      val port = conf.getInt("spark.shuffle.service.port", 7337)
+      val transportConf = new TransportConf(new SystemPropertyConfigProvider())
+      val rpcHandler = new StandaloneShuffleBlockHandler()
+      val transportContext = new TransportContext(transportConf, rpcHandler)
+      transportContext.createServer(port)
+    }
+
     val args = new WorkerArguments(argStrings, conf)
     val (actorSystem, _) = startSystemAndActor(args.host, args.port, args.webUiPort, args.cores,
       args.memory, args.masters, args.workDir)

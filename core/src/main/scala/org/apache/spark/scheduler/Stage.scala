@@ -102,11 +102,11 @@ private[spark] class Stage(
     }
   }
 
-  def removeOutputsOnExecutor(execId: String) {
+  def removeOutputsOnExecutor(executorId: String) {
     var becameUnavailable = false
     for (partition <- 0 until numPartitions) {
       val prevList = outputLocs(partition)
-      val newList = prevList.filterNot(_.location.executorId == execId)
+      val newList = prevList.filterNot(_.location.executorId == executorId)
       outputLocs(partition) = newList
       if (prevList != Nil && newList == Nil) {
         becameUnavailable = true
@@ -115,7 +115,7 @@ private[spark] class Stage(
     }
     if (becameUnavailable) {
       logInfo("%s is now unavailable on executor %s (%d/%d, %s)".format(
-        this, execId, numAvailableOutputs, numPartitions, isAvailable))
+        this, executorId, numAvailableOutputs, numPartitions, isAvailable))
     }
   }
 
@@ -131,4 +131,9 @@ private[spark] class Stage(
   override def toString = "Stage " + id
 
   override def hashCode(): Int = id
+
+  override def equals(o: Any): Boolean = o match {
+    case s: Stage => s != null && s.id == id
+    case _ => false
+  }
 }

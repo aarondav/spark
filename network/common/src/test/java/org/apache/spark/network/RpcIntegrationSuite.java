@@ -35,9 +35,10 @@ import static org.junit.Assert.*;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.client.TransportClientFactory;
-import org.apache.spark.network.server.DefaultStreamManager;
 import org.apache.spark.network.server.RpcHandler;
+import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.server.TransportServer;
+import org.apache.spark.network.util.SystemPropertyConfigProvider;
 import org.apache.spark.network.util.TransportConf;
 
 public class RpcIntegrationSuite {
@@ -49,6 +50,9 @@ public class RpcIntegrationSuite {
   public static void setUp() throws Exception {
     TransportConf conf = new TransportConf(new SystemPropertyConfigProvider());
     rpcHandler = new RpcHandler() {
+      @Override
+      public StreamManager getStreamManager() { throw new UnsupportedOperationException(); }
+
       @Override
       public void receive(TransportClient client, byte[] message, RpcResponseCallback callback) {
         String msg = new String(message, Charsets.UTF_8);
@@ -62,7 +66,7 @@ public class RpcIntegrationSuite {
         }
       }
     };
-    TransportContext context = new TransportContext(conf, new DefaultStreamManager(), rpcHandler);
+    TransportContext context = new TransportContext(conf, rpcHandler);
     server = context.createServer();
     clientFactory = context.createClientFactory();
   }

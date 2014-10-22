@@ -19,26 +19,25 @@ package org.apache.spark.network.netty
 
 import java.nio.ByteBuffer
 
-import org.apache.spark.Logging
-import org.apache.spark.network.BlockDataManager
-import org.apache.spark.serializer.Serializer
-import org.apache.spark.network.buffer.{NioManagedBuffer, ManagedBuffer}
-import org.apache.spark.network.client.{TransportClient, RpcResponseCallback}
-import org.apache.spark.network.server.{DefaultStreamManager, RpcHandler}
-import org.apache.spark.storage.{StorageLevel, BlockId}
-
 import scala.collection.JavaConversions._
 
-object NettyMessages {
+import org.apache.spark.Logging
+import org.apache.spark.network.BlockDataManager
+import org.apache.spark.network.buffer.{ManagedBuffer, NioManagedBuffer}
+import org.apache.spark.network.client.{RpcResponseCallback, TransportClient}
+import org.apache.spark.network.server.{OneForOneStreamManager, RpcHandler, StreamManager}
+import org.apache.spark.serializer.Serializer
+import org.apache.spark.storage.{BlockId, StorageLevel}
 
-  /** Request to read a set of blocks. Returns [[ShuffleStreamHandle]] to identify the stream. */
+object NettyMessages {
+  /** Request to read a set of blocks. Returns [[NettyStreamHandle]] to identify the stream. */
   case class OpenBlocks(blockIds: Seq[BlockId])
 
   /** Request to upload a block with a certain StorageLevel. Returns nothing (empty byte array). */
   case class UploadBlock(blockId: BlockId, blockData: Array[Byte], level: StorageLevel)
 
   /** Identifier for a fixed number of chunks to read from a stream created by [[OpenBlocks]]. */
-  case class ShuffleStreamHandle(streamId: Long, numChunks: Int)
+  case class NettyStreamHandle(streamId: Long, numChunks: Int)
 }
 
 /**
@@ -46,11 +45,14 @@ object NettyMessages {
  */
 class NettyBlockRpcServer(
     serializer: Serializer,
-    streamManager: DefaultStreamManager,
     blockManager: BlockDataManager)
   extends RpcHandler with Logging {
 
   import NettyMessages._
+
+  private val streamManager = new OneForOneStreamManager()
+
+  override def getStreamManager(): StreamManager = streamManager
 
   override def receive(
       client: TransportClient,
@@ -66,7 +68,7 @@ class NettyBlockRpcServer(
         val streamId = streamManager.registerStream(blocks.iterator)
         logTrace(s"Registered streamId $streamId with ${blocks.size} buffers")
         responseContext.onSuccess(
-          ser.serialize(new ShuffleStreamHandle(streamId, blocks.size)).array())
+          ser.serialize(new NettyStreamHandle(streamId, blocks.size)).array())
 
       case UploadBlock(blockId, blockData, level) =>
         blockManager.putBlockData(blockId, new NioManagedBuffer(ByteBuffer.wrap(blockData)), level)
