@@ -66,19 +66,16 @@ public class StandaloneShuffleClient implements ShuffleClient {
    * @param host Host of standalone shuffle server.
    * @param port Port of standalone shuffle server.
    * @param execId This Executor's id.
-   * @param localDirs The local dirs between which we will hash our shuffle files.
-   * @param subDirsPerLocalDir Number of subdirectories we create per local directory.
+   * @param executorConfig Contains all config necessary for the service to find our shuffle files.
    */
   public void registerWithStandaloneShuffleService(
       String host,
       int port,
       String execId,
-      String[] localDirs,
-      int subDirsPerLocalDir,
-      String shuffleManager) {
+      ExecutorShuffleConfig executorConfig) {
     TransportClient client = clientFactory.createClient(host, port);
-    byte[] registerExecutorMessage = JavaUtils.serialize(
-      new RegisterExecutor(appId, execId, localDirs, subDirsPerLocalDir, shuffleManager));
+    byte[] registerExecutorMessage =
+      JavaUtils.serialize(new RegisterExecutor(appId, execId, executorConfig));
     client.sendRpcSync(registerExecutorMessage, 3000);
   }
 }

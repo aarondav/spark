@@ -35,7 +35,7 @@ import org.apache.spark.io.CompressionCodec
 import org.apache.spark.network._
 import org.apache.spark.network.buffer.{ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.network.netty.{SparkTransportConf, NettyBlockTransferService}
-import org.apache.spark.network.shuffle.StandaloneShuffleClient
+import org.apache.spark.network.shuffle.{ExecutorShuffleConfig, StandaloneShuffleClient}
 import org.apache.spark.network.util.{ConfigProvider, TransportConf}
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.ShuffleManager
@@ -181,10 +181,12 @@ private[spark] class BlockManager(
     if (externalShuffleServiceEnabled && !blockManagerId.isDriver) {
       logInfo("Registering executor with local external shuffle service.")
       // Synchronous and will throw an exception if we cannot connect.
+      val shuffleConfig = new ExecutorShuffleConfig(
+          diskBlockManager.localDirs.map(_.toString),
+          diskBlockManager.subDirsPerLocalDir,
+          shuffleManager.getClass.getName)
       shuffleClient.asInstanceOf[StandaloneShuffleClient].registerWithStandaloneShuffleService(
-        shuffleServerId.host, shuffleServerId.port, shuffleServerId.executorId,
-        diskBlockManager.localDirs.map(_.toString), diskBlockManager.subDirsPerLocalDir,
-        shuffleManager.getClass.getName)
+        shuffleServerId.host, shuffleServerId.port, shuffleServerId.executorId, shuffleConfig)
     }
   }
 

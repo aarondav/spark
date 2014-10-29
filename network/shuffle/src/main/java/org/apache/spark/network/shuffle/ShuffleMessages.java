@@ -48,21 +48,15 @@ public class ShuffleMessages {
   public static class RegisterExecutor implements Serializable {
     public final String appId;
     public final String execId;
-    public final String[] localDirs;
-    public final int subDirsPerLocalDir;
-    public final String shuffleManager;
+    public final ExecutorShuffleConfig executorConfig;
 
     public RegisterExecutor(
         String appId,
         String execId,
-        String[] localDirs,
-        int subDirsPerLocalDir,
-        String shuffleManager) {
+        ExecutorShuffleConfig executorConfig) {
       this.appId = appId;
       this.execId = execId;
-      this.localDirs = localDirs;
-      this.subDirsPerLocalDir = subDirsPerLocalDir;
-      this.shuffleManager = shuffleManager;
+      this.executorConfig = executorConfig;
     }
   }
 }

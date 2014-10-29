@@ -69,8 +69,7 @@ public class StandaloneShuffleBlockHandler implements RpcHandler {
 
     } else if (msgObj instanceof RegisterExecutor) {
       RegisterExecutor msg = (RegisterExecutor) msgObj;
-      blockManager.registerExecutor(msg.appId, msg.execId, msg.localDirs, msg.subDirsPerLocalDir,
-        msg.shuffleManager);
+      blockManager.registerExecutor(msg.appId, msg.execId, msg.executorConfig);
       callback.onSuccess(new byte[0]);
     }
   }
