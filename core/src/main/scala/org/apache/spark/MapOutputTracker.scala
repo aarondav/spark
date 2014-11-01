@@ -21,6 +21,8 @@ import java.io._
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
+import org.apache.spark.MapOutputTracker._
+
 import scala.collection.mutable.{HashSet, HashMap, Map}
 import scala.concurrent.Await
 import scala.collection.JavaConversions._
@@ -178,6 +180,7 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
           return MapOutputTracker.convertMapStatuses(shuffleId, reduceId, fetchedStatuses)
         }
       } else {
+        logError("Missing ALL output locations for shuffle " + shuffleId)
         throw new MetadataFetchFailedException(
           shuffleId, reduceId, "Missing all output locations for shuffle " + shuffleId)
       }
@@ -348,7 +351,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
     new ConcurrentHashMap[Int, Array[MapStatus]]
 }
 
-private[spark] object MapOutputTracker {
+private[spark] object MapOutputTracker extends Logging {
 
   // Serialize an array of map output locations into an efficient byte format so that we can send
   // it to reduce tasks. We do this by compressing the serialized bytes using GZIP. They will
@@ -381,6 +384,7 @@ private[spark] object MapOutputTracker {
     statuses.map {
       status =>
         if (status == null) {
+          logError("Missing an output location for shuffle " + shuffleId + " / " + statuses.toList)
           throw new MetadataFetchFailedException(
             shuffleId, reduceId, "Missing an output location for shuffle " + shuffleId)
         } else {
