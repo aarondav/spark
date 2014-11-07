@@ -35,6 +35,12 @@ public class TransportConf {
     return conf.getBoolean("spark.shuffle.io.preferDirectBufs", true);
   }
 
+  /** Returns the number of cores which we will allow netty to use. Affects allocated memory. */
+  public int maxUsableCores() {
+    return conf.getInt("spark.shuffle.io.maxUsableCores",
+      Runtime.getRuntime().availableProcessors());
+  }
+
   /** Connect timeout in secs. Default 120 secs. */
   public int connectionTimeoutMs() {
     return conf.getInt("spark.shuffle.io.connectionTimeout", 120) * 1000;
