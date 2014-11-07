@@ -35,7 +35,7 @@ public class ExternalShuffleMessages {
 
     /** Preceding every serialized Message is its type, which allows us to deserialize it. */
     public static enum Type implements Encodable {
-      OpenShuffleBlocks(0), RegisterExecutor(1);
+      OpenShuffleBlocks(0), RegisterExecutor(1), UploadBlock(2);
 
       private final byte id;
 
@@ -55,6 +55,7 @@ public class ExternalShuffleMessages {
         switch (id) {
           case 0: return OpenShuffleBlocks;
           case 1: return RegisterExecutor;
+          case 2: return UploadBlock;
           default: throw new IllegalArgumentException("Unknown message type: " + id);
         }
       }

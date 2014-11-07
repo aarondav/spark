@@ -21,6 +21,8 @@ import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,12 +64,13 @@ public class ExternalShuffleBlockHandler extends RpcHandler {
 
   @Override
   public void receive(TransportClient client, byte[] message, RpcResponseCallback callback) {
-    Object msgObj = JavaUtils.deserialize(message);
+    ByteBuf buf = Unpooled.wrappedBuffer(message);
+    ExternalShuffleMessage.Type type = ExternalShuffleMessage.Type.decode(buf);
 
-    logger.trace("Received message: " + msgObj);
+    logger.trace("Received message: " + type);
 
-    if (msgObj instanceof OpenShuffleBlocks) {
-      OpenShuffleBlocks msg = (OpenShuffleBlocks) msgObj;
+    if (type == ExternalShuffleMessage.Type.OpenShuffleBlocks) {
+      OpenShuffleBlocks msg = OpenShuffleBlocks.decode(buf);
       List<ManagedBuffer> blocks = Lists.newArrayList();
 
       for (String blockId : msg.blockIds) {
@@ -78,14 +81,14 @@ public class ExternalShuffleBlockHandler extends RpcHandler {
       callback.onSuccess(JavaUtils.serialize(
         new ShuffleStreamHandle(streamId, msg.blockIds.length)));
 
-    } else if (msgObj instanceof RegisterExecutor) {
-      RegisterExecutor msg = (RegisterExecutor) msgObj;
+    } else if (type == ExternalShuffleMessage.Type.RegisterExecutor) {
+      RegisterExecutor msg = RegisterExecutor.decode(buf);
       blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
       callback.onSuccess(new byte[0]);
 
     } else {
       throw new UnsupportedOperationException(String.format(
-        "Unexpected message: %s (class = %s)", msgObj, msgObj.getClass()));
+        "Unexpected message: %s", type));
     }
   }
 

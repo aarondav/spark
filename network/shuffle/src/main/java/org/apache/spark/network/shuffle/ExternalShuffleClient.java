@@ -86,7 +86,7 @@ public class ExternalShuffleClient extends ShuffleClient {
     try {
       TransportClient client = clientFactory.createClient(host, port);
       new OneForOneBlockFetcher(client, blockIds, listener)
-        .start(new ExternalShuffleMessages.OpenShuffleBlocks(appId, execId, blockIds));
+        .start(appId, execId);
     } catch (Exception e) {
       logger.error("Exception while beginning fetchBlocks", e);
       for (String blockId : blockIds) {

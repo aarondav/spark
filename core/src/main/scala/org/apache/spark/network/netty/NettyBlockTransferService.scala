@@ -73,7 +73,7 @@ class NettyBlockTransferService(conf: SparkConf, securityManager: SecurityManage
     try {
       val client = clientFactory.createClient(host, port)
       new OneForOneBlockFetcher(client, blockIds.toArray, listener)
-        .start(OpenBlocks(blockIds.map(BlockId.apply)))
+        .start(conf.getAppId, execId)
     } catch {
       case e: Exception =>
         logError("Exception while beginning fetchBlocks", e)

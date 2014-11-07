@@ -19,6 +19,11 @@ package org.apache.spark.network.netty
 
 import java.nio.ByteBuffer
 
+import io.netty.buffer.{Unpooled, ByteBuf}
+import org.apache.spark.network.protocol.Encodable
+import org.apache.spark.network.shuffle.ExternalShuffleMessages.{ExternalShuffleMessage, OpenShuffleBlocks}
+import org.apache.spark.network.util.JavaUtils
+
 import scala.collection.JavaConversions._
 
 import org.apache.spark.Logging
@@ -26,16 +31,24 @@ import org.apache.spark.network.BlockDataManager
 import org.apache.spark.network.buffer.{ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient}
 import org.apache.spark.network.server.{OneForOneStreamManager, RpcHandler, StreamManager}
-import org.apache.spark.network.shuffle.ShuffleStreamHandle
+import org.apache.spark.network.shuffle.{ExternalShuffleMessages, ShuffleStreamHandle}
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.storage.{BlockId, StorageLevel}
 
-object NettyMessages {
-  /** Request to read a set of blocks. Returns [[ShuffleStreamHandle]] to identify the stream. */
-  case class OpenBlocks(blockIds: Seq[BlockId])
-
+object NettyMessages extends ExternalShuffleMessages {
   /** Request to upload a block with a certain StorageLevel. Returns nothing (empty byte array). */
   case class UploadBlock(blockId: BlockId, blockData: Array[Byte], level: StorageLevel)
+      extends ExternalShuffleMessage {
+    private lazy val serializedVersion = JavaUtils.serialize(this)
+
+    override def `type`() = ExternalShuffleMessage.Type.UploadBlock
+    override def encodedLength() = serializedVersion.length
+    override def encode(buf: ByteBuf) = buf.writeBytes(serializedVersion)
+  }
+
+  object UploadBlock {
+    def decode(buf: ByteBuf): UploadBlock = JavaUtils.deserialize(buf.array())
+  }
 }
 
 /**
@@ -59,19 +72,25 @@ class NettyBlockRpcServer(
       messageBytes: Array[Byte],
       responseContext: RpcResponseCallback): Unit = {
     val ser = serializer.newInstance()
+
+    val buf = Unpooled.wrappedBuffer(messageBytes)
+    val typ = ExternalShuffleMessage.Type.decode(buf)
     val message = ser.deserialize[AnyRef](ByteBuffer.wrap(messageBytes))
     logTrace(s"Received request: $message")
 
-    message match {
-      case OpenBlocks(blockIds) =>
-        val blocks: Seq[ManagedBuffer] = blockIds.map(blockManager.getBlockData)
+    typ match {
+      case ExternalShuffleMessage.Type.OpenShuffleBlocks =>
+        val openBlocks = OpenShuffleBlocks.decode(buf)
+        val blocks: Seq[ManagedBuffer] = openBlocks.blockIds.map(blockManager.getBlockData)
         val streamId = streamManager.registerStream(blocks.iterator)
         logTrace(s"Registered streamId $streamId with ${blocks.size} buffers")
         responseContext.onSuccess(
           ser.serialize(new ShuffleStreamHandle(streamId, blocks.size)).array())
 
-      case UploadBlock(blockId, blockData, level) =>
-        blockManager.putBlockData(blockId, new NioManagedBuffer(ByteBuffer.wrap(blockData)), level)
+      case ExternalShuffleMessage.Type.UploadBlock =>
+        val uploadBlock = UploadBlock.decode(buf)
+        blockManager.putBlockData(uploadBlock.blockId,
+          new NioManagedBuffer(ByteBuffer.wrap(uploadBlock.blockData)), uploadBlock.level)
         responseContext.onSuccess(new Array[Byte](0))
     }
   }

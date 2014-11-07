@@ -19,6 +19,8 @@ package org.apache.spark.network.shuffle;
 
 import java.util.Arrays;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,8 +83,12 @@ public class OneForOneBlockFetcher {
    * The given message will be serialized with the Java serializer, and the RPC must return a
    * {@link ShuffleStreamHandle}. We will send all fetch requests immediately, without throttling.
    */
-  public void start(Object openBlocksMessage) {
-    client.sendRpc(JavaUtils.serialize(openBlocksMessage), new RpcResponseCallback() {
+  public void start(String appId, String execId) {
+    ExternalShuffleMessages.OpenShuffleBlocks msg =
+      new ExternalShuffleMessages.OpenShuffleBlocks(appId, execId, blockIds);
+    ByteBuf buf = Unpooled.buffer(msg.encodedLength());
+    msg.encode(buf);
+    client.sendRpc(buf.array(), new RpcResponseCallback() {
       @Override
       public void onSuccess(byte[] response) {
         try {
