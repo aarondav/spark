@@ -135,7 +135,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
 
   @Override
   public Object convertToNetty() throws IOException {
-    FileChannel fileChannel = new FileInputStream(file).getChannel();
+//    FileChannel fileChannel = new FileInputStream(file).getChannel();
     return Unpooled.wrappedBuffer(nioByteBuffer());//new DefaultFileRegion(fileChannel, offset, length);
   }
 

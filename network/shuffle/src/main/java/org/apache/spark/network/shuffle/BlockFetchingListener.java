@@ -17,6 +17,7 @@
 
 package org.apache.spark.network.shuffle;
 
+import java.io.Closeable;
 import java.util.EventListener;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
