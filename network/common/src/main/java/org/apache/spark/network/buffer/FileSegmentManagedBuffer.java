@@ -27,6 +27,7 @@ import java.nio.channels.FileChannel;
 
 import com.google.common.base.Objects;
 import com.google.common.io.ByteStreams;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.DefaultFileRegion;
 
 import org.apache.spark.network.util.JavaUtils;
@@ -135,7 +136,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
   @Override
   public Object convertToNetty() throws IOException {
     FileChannel fileChannel = new FileInputStream(file).getChannel();
-    return new DefaultFileRegion(fileChannel, offset, length);
+    return Unpooled.wrappedBuffer(nioByteBuffer());//new DefaultFileRegion(fileChannel, offset, length);
   }
 
   public File getFile() { return file; }
