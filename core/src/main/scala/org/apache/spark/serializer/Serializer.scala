@@ -119,7 +119,7 @@ abstract class SerializationStream {
  * A stream for reading serialized objects.
  */
 @DeveloperApi
-abstract class DeserializationStream {
+abstract class DeserializationStream extends Closeable {
   def readObject[T: ClassTag](): T
   def close(): Unit
 

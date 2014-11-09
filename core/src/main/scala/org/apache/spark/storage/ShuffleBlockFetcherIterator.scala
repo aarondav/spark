@@ -128,9 +128,7 @@ final class ShuffleBlockFetcherIterator(
       case _ =>
     }
 
-    if (currentResultStream != null) {
-      currentResultStream.close();
-    }
+    JavaUtils.closeQuietly(currentResultStream)
 
     // Release buffers in the results queue
     val iter = results.iterator()
