@@ -23,8 +23,6 @@ import java.util.EventListener;
 import org.apache.spark.network.buffer.ManagedBuffer;
 
 public interface BlockFetchingListener extends EventListener {
-  void onBlockFetchStart(Closeable fetchContext);
-
   /**
    * Called once per successfully fetched block. After this call returns, data will be released
    * automatically. If the data will be passed to another thread, the receiver should retain()

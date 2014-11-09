@@ -17,6 +17,8 @@
 
 package org.apache.spark.network.shuffle;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.Arrays;
 
 import org.slf4j.Logger;
@@ -37,7 +39,7 @@ import org.apache.spark.network.util.JavaUtils;
  * Note that this typically corresponds to a
  * {@link org.apache.spark.network.server.OneForOneStreamManager} on the server side.
  */
-public class OneForOneBlockFetcher {
+public class OneForOneBlockFetcher implements Closeable {
   private final Logger logger = LoggerFactory.getLogger(OneForOneBlockFetcher.class);
 
   private final TransportClient client;
@@ -55,6 +57,11 @@ public class OneForOneBlockFetcher {
     this.blockIds = blockIds;
     this.listener = listener;
     this.chunkCallback = new ChunkCallback();
+  }
+
+  @Override
+  public void close() throws IOException {
+    // todo
   }
 
   /** Callback invoked on receipt of each chunk. We equate a single chunk to a single block. */

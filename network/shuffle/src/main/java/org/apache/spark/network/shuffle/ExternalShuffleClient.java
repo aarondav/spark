@@ -17,6 +17,7 @@
 
 package org.apache.spark.network.shuffle;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 
@@ -88,11 +89,12 @@ public class ExternalShuffleClient extends ShuffleClient {
       RetryingBlockFetcher.BlockFetchStarter blockFetchStarter =
         new RetryingBlockFetcher.BlockFetchStarter() {
           @Override
-          public void createAndStart(String[] blockIds, BlockFetchingListener listener)
+          public Closeable createAndStart(String[] blockIds, BlockFetchingListener listener)
               throws IOException {
             TransportClient client = clientFactory.createClient(host, port);
-            new OneForOneBlockFetcher(client, blockIds, listener)
-              .start(new ExternalShuffleMessages.OpenShuffleBlocks(appId, execId, blockIds));
+            OneForOneBlockFetcher fetcher = new OneForOneBlockFetcher(client, blockIds, listener);
+            fetcher.start(new ExternalShuffleMessages.OpenShuffleBlocks(appId, execId, blockIds));
+            return fetcher;
           }
         };
 

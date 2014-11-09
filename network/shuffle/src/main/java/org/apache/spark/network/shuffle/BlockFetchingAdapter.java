@@ -23,9 +23,6 @@ import org.apache.spark.network.buffer.ManagedBuffer;
 
 public abstract class BlockFetchingAdapter implements BlockFetchingListener {
   @Override
-  public void onBlockFetchStart(Closeable fetchContext) { }
-
-  @Override
   public void onBlockFetchSuccess(String blockId, ManagedBuffer data) { }
 
   @Override

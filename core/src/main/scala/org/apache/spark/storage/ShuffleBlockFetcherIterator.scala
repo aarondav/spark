@@ -17,6 +17,7 @@
 
 package org.apache.spark.storage
 
+import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
 
 import scala.collection.mutable.{ArrayBuffer, HashSet, Queue}
@@ -26,7 +27,7 @@ import org.apache.spark.{Logging, TaskContext}
 import org.apache.spark.network.BlockTransferService
 import org.apache.spark.network.shuffle.{BlockFetchingAdapter, ShuffleClient}
 import org.apache.spark.network.buffer.ManagedBuffer
-import org.apache.spark.serializer.Serializer
+import org.apache.spark.serializer.{DeserializationStream, Serializer}
 import org.apache.spark.util.{CompletionIterator, Utils}
 
 /**
@@ -93,6 +94,7 @@ final class ShuffleBlockFetcherIterator(
    * in case of a runtime exception when processing the current buffer.
    */
   @volatile private[this] var currentResult: FetchResult = null
+  @volatile private[this] var currentResultStream: DeserializationStream = null
 
   /**
    * Queue of fetch requests to issue; we'll pull requests off this gradually to make sure that
@@ -122,6 +124,10 @@ final class ShuffleBlockFetcherIterator(
     currentResult match {
       case SuccessFetchResult(_, _, buf) => buf.release()
       case _ =>
+    }
+
+    if (currentResultStream != null) {
+      currentResultStream.close();
     }
 
     // Release buffers in the results queue
@@ -292,7 +298,9 @@ final class ShuffleBlockFetcherIterator(
       case FailureFetchResult(_, e) => Failure(e)
       case SuccessFetchResult(blockId, _, buf) => {
         val is = blockManager.wrapForCompression(blockId, buf.createInputStream())
-        val iter = serializer.newInstance().deserializeStream(is).asIterator
+        val deserStream = serializer.newInstance().deserializeStream(is)
+        currentResultStream = deserStream
+        val iter = deserStream.asIterator
         Success(CompletionIterator[Any, Iterator[Any]](iter, {
           // Once the iterator is exhausted, release the buffer and set currentResult to null
           // so we don't release it again in cleanup.
