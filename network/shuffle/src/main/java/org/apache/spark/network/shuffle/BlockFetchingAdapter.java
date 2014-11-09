@@ -18,22 +18,16 @@
 package org.apache.spark.network.shuffle;
 
 import java.io.Closeable;
-import java.util.EventListener;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
 
-public interface BlockFetchingListener extends EventListener {
-  void onBlockFetchStart(Closeable fetchContext);
+public abstract class BlockFetchingAdapter implements BlockFetchingListener {
+  @Override
+  public void onBlockFetchStart(Closeable fetchContext) { }
 
-  /**
-   * Called once per successfully fetched block. After this call returns, data will be released
-   * automatically. If the data will be passed to another thread, the receiver should retain()
-   * and release() the buffer on their own, or copy the data to a new buffer.
-   */
-  void onBlockFetchSuccess(String blockId, ManagedBuffer data);
+  @Override
+  public void onBlockFetchSuccess(String blockId, ManagedBuffer data) { }
 
-  /**
-   * Called at least once per block upon failures.
-   */
-  void onBlockFetchFailure(String blockId, Throwable exception);
+  @Override
+  public void onBlockFetchFailure(String blockId, Throwable exception) { }
 }

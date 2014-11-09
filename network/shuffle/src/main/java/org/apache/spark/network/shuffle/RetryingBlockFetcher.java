@@ -17,19 +17,24 @@
 
 package org.apache.spark.network.shuffle;
 
+import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
+import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.TransportConf;
 
@@ -85,13 +90,6 @@ public class RetryingBlockFetcher {
   private int retryCount = 0;
 
   /**
-   * Set of all block ids which have not been fetched successfully or with a non-IO Exception.
-   * A retry involves requesting every outstanding block. Note that since this is a LinkedHashSet,
-   * input ordering is preserved, so we always request blocks in the same order the user provided.
-   */
-  private final LinkedHashSet<String> outstandingBlocksIds;
-
-  /**
    * The BlockFetchingListener that is active with our current BlockFetcher.
    * When we start a retry, we immediately replace this with a new Listener, which causes all any
    * old Listeners to ignore all further responses.
@@ -107,9 +105,10 @@ public class RetryingBlockFetcher {
     this.listener = listener;
     this.maxRetries = conf.maxIORetries();
     this.retryWaitTime = conf.ioRetryWaitTime();
-    this.outstandingBlocksIds = Sets.newLinkedHashSet();
-    Collections.addAll(outstandingBlocksIds, blockIds);
-    this.currentListener = new RetryingBlockFetchListener();
+
+    List<String> blockIdList = Lists.newArrayList();
+    Collections.addAll(blockIdList, blockIds);
+    this.currentListener = new RetryingBlockFetchListener(blockIdList);
   }
 
   /**
@@ -117,57 +116,60 @@ public class RetryingBlockFetcher {
    * event of transient IOExceptions.
    */
   public void start() {
-    fetchAllOutstanding();
+    currentListener.start();
   }
 
   /**
    * Fires off a request to fetch all blocks that have not been fetched successfully or permanently
    * failed (i.e., by a non-IOException).
    */
-  private void fetchAllOutstanding() {
-    // Start by retrieving our shared state within a synchronized block.
-    String[] blockIdsToFetch;
-    int numRetries;
-    RetryingBlockFetchListener myListener;
-    synchronized (this) {
-      blockIdsToFetch = outstandingBlocksIds.toArray(new String[outstandingBlocksIds.size()]);
-      numRetries = retryCount;
-      myListener = currentListener;
-    }
-
-    // Now initiate the fetch on all outstanding blocks, possibly initiating a retry if that fails.
-    try {
-      fetchStarter.createAndStart(blockIdsToFetch, myListener);
-    } catch (Exception e) {
-      logger.error(String.format("Exception while beginning fetch of %s outstanding blocks %s",
-        blockIdsToFetch.length, numRetries > 0 ? "(after " + numRetries + " retries)" : ""), e);
-
-      if (shouldRetry(e)) {
-        initiateRetry();
-      } else {
-        for (String bid : blockIdsToFetch) {
-          listener.onBlockFetchFailure(bid, e);
-        }
-      }
-    }
-  }
+//  private void fetchAllOutstanding(RetryingBlockFetchListener outstandingBlockIds) {
+//    // Start by retrieving our shared state within a synchronized block.
+//    String[] blockIdsToFetch;
+//    int numRetries;
+//    RetryingBlockFetchListener myListener;
+//    synchronized (this) {
+//      blockIdsToFetch = outstandingBlockIds.toArray(new String[outstandingBlockIds.size()]);
+//      numRetries = retryCount;
+//      myListener = currentListener;
+//    }
+//
+//    // Now initiate the fetch on all outstanding blocks, possibly initiating a retry if that fails.
+//    try {
+//      currentListener.
+//      fetchStarter.createAndStart(blockIdsToFetch, myListener);
+//    } catch (Exception e) {
+//      logger.error(String.format("Exception while beginning fetch of %s outstanding blocks %s",
+//        blockIdsToFetch.length, numRetries > 0 ? "(after " + numRetries + " retries)" : ""), e);
+//
+//      if (shouldRetry(e)) {
+//        initiateRetry(outstandingBlockIds);
+//      } else {
+//        for (String bid : blockIdsToFetch) {
+//          listener.onBlockFetchFailure(bid, e);
+//        }
+//      }
+//    }
+//  }
 
   /**
    * Lightweight method which initiates a retry in a different thread. The retry will involve
    * calling fetchAllOutstanding() after a configured wait time.
    */
-  private synchronized void initiateRetry() {
+  private synchronized void initiateRetry(final Collection<String> outstandingBlockIds) {
     retryCount += 1;
-    currentListener = new RetryingBlockFetchListener();
+
+    currentListener.close();
+    currentListener = new RetryingBlockFetchListener(outstandingBlockIds);
 
     logger.info("Retrying fetch ({}/{}) for {} outstanding blocks after {} ms",
-      retryCount, maxRetries, outstandingBlocksIds.size(), retryWaitTime);
+      retryCount, maxRetries, outstandingBlockIds.size(), retryWaitTime);
 
     executorService.submit(new Runnable() {
       @Override
       public void run() {
         Uninterruptibles.sleepUninterruptibly(retryWaitTime, TimeUnit.MILLISECONDS);
-        fetchAllOutstanding();
+        currentListener.start();
       }
     });
   }
@@ -183,22 +185,63 @@ public class RetryingBlockFetcher {
     return isIOException && hasRemainingRetries;
   }
 
+  public synchronized void close() {
+    JavaUtils.closeQuietly(currentListener);
+  }
+
   /**
    * Our RetryListener intercepts block fetch responses and forwards them to our parent listener.
    * Note that in the event of a retry, we will immediately replace the 'currentListener' field,
    * indicating that any responses from non-current Listeners should be ignored.
    */
-  private class RetryingBlockFetchListener implements BlockFetchingListener {
+  private class RetryingBlockFetchListener implements BlockFetchingListener, Closeable {
+    boolean canceled = false;
+    Closeable fetchContext = null;
+    final LinkedHashSet<String> outstandingBlockIds;
+
+    public RetryingBlockFetchListener(Collection<String> expectedBlockIds) {
+      this.outstandingBlockIds = Sets.newLinkedHashSet(expectedBlockIds);
+    }
+
+    public void onBlockFetchStart(Closeable fetchContext) {
+      if (!canceled) {
+        this.fetchContext = fetchContext;
+      } else {
+        JavaUtils.closeQuietly(fetchContext);
+      }
+    }
+
+    public void start() {
+      String[] blockIds = outstandingBlockIds.toArray(new String[outstandingBlockIds.size()]);
+      try {
+        fetchStarter.createAndStart(blockIds, this);
+      } catch (Exception e) {
+        logger.error(String.format("Exception while beginning fetch of %s outstanding blocks %s",
+          blockIds.length, retryCount > 0 ? "(after " + retryCount + " retries)" : ""), e);
+
+        if (shouldRetry(e)) {
+          initiateRetry(outstandingBlockIds);
+        } else {
+          for (String bid : blockIds) {
+            listener.onBlockFetchFailure(bid, e);
+          }
+        }
+      }
+    }
+
+    public void close() {
+      JavaUtils.closeQuietly(fetchContext);
+      canceled = true;
+    }
+
     @Override
     public void onBlockFetchSuccess(String blockId, ManagedBuffer data) {
       // We will only forward this success message to our parent listener if this block request is
       // outstanding and we are still the active listener.
       boolean shouldForwardSuccess = false;
-      synchronized (RetryingBlockFetcher.this) {
-        if (this == currentListener && outstandingBlocksIds.contains(blockId)) {
-          outstandingBlocksIds.remove(blockId);
-          shouldForwardSuccess = true;
-        }
+      if (!canceled && outstandingBlockIds.contains(blockId)) {
+        outstandingBlockIds.remove(blockId);
+        shouldForwardSuccess = true;
       }
 
       // Now actually invoke the parent listener, outside of the synchronized block.
@@ -212,16 +255,14 @@ public class RetryingBlockFetcher {
       // We will only forward this failure to our parent listener if this block request is
       // outstanding, we are still the active listener, AND we cannot retry the fetch.
       boolean shouldForwardFailure = false;
-      synchronized (RetryingBlockFetcher.this) {
-        if (this == currentListener && outstandingBlocksIds.contains(blockId)) {
-          if (shouldRetry(exception)) {
-            initiateRetry();
-          } else {
-            logger.error(String.format("Failed to fetch block %s, and will not retry (%s retries)",
-              blockId, retryCount), exception);
-            outstandingBlocksIds.remove(blockId);
-            shouldForwardFailure = true;
-          }
+      if (!canceled && outstandingBlockIds.contains(blockId)) {
+        if (shouldRetry(exception)) {
+          initiateRetry(outstandingBlockIds);
+        } else {
+          logger.error(String.format("Failed to fetch block %s, and will not retry (%s retries)",
+            blockId, retryCount), exception);
+          outstandingBlockIds.remove(blockId);
+          shouldForwardFailure = true;
         }
       }
 

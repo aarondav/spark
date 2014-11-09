@@ -25,7 +25,7 @@ import scala.concurrent.duration.Duration
 
 import org.apache.spark.Logging
 import org.apache.spark.network.buffer.{NioManagedBuffer, ManagedBuffer}
-import org.apache.spark.network.shuffle.{ShuffleClient, BlockFetchingListener}
+import org.apache.spark.network.shuffle.{ShuffleClient, BlockFetchingAdapter, BlockFetchingListener}
 import org.apache.spark.storage.{BlockManagerId, BlockId, StorageLevel}
 
 private[spark]
@@ -86,7 +86,7 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
     // A monitor for the thread to wait on.
     val result = Promise[ManagedBuffer]()
     fetchBlocks(host, port, execId, Array(blockId),
-      new BlockFetchingListener {
+      new BlockFetchingAdapter {
         override def onBlockFetchFailure(blockId: String, exception: Throwable): Unit = {
           result.failure(exception)
         }

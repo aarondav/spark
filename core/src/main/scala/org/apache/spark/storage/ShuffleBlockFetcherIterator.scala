@@ -24,7 +24,7 @@ import scala.util.{Failure, Success, Try}
 
 import org.apache.spark.{Logging, TaskContext}
 import org.apache.spark.network.BlockTransferService
-import org.apache.spark.network.shuffle.{BlockFetchingListener, ShuffleClient}
+import org.apache.spark.network.shuffle.{BlockFetchingAdapter, ShuffleClient}
 import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.util.{CompletionIterator, Utils}
@@ -146,7 +146,7 @@ final class ShuffleBlockFetcherIterator(
 
     val address = req.address
     shuffleClient.fetchBlocks(address.host, address.port, address.executorId, blockIds.toArray,
-      new BlockFetchingListener {
+      new BlockFetchingAdapter {
         override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
           // Only add the buffer to results queue if the iterator is not zombie,
           // i.e. cleanup() has not been called yet.

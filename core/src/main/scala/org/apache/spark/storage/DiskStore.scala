@@ -106,6 +106,7 @@ private[spark] class DiskStore(blockManager: BlockManager, diskManager: DiskBloc
   private def getBytes(file: File, offset: Long, length: Long): Option[ByteBuffer] = {
     val channel = new RandomAccessFile(file, "r").getChannel
 
+    System.out.println("getbytes invoked for " + file)
     try {
       // For small files, directly read rather than memory map
       if (length < minMemoryMapBytes) {

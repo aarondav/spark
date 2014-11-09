@@ -65,8 +65,9 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
     FileChannel channel = null;
     try {
       channel = new RandomAccessFile(file, "r").getChannel();
+      System.out.println("NIO Byte buffer opened to " + file + " (len = " + length + ")");
       // Just copy the buffer if it's sufficiently small, as memory mapping has a high overhead.
-      if (length < MIN_MEMORY_MAP_BYTES) {
+//      if (length < MIN_MEMORY_MAP_BYTES) {
         ByteBuffer buf = ByteBuffer.allocate((int) length);
         channel.position(offset);
         while (buf.remaining() != 0) {
@@ -78,9 +79,9 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
         }
         buf.flip();
         return buf;
-      } else {
-        return channel.map(FileChannel.MapMode.READ_ONLY, offset, length);
-      }
+//      } else {
+//        return channel.map(FileChannel.MapMode.READ_ONLY, offset, length);
+//      }
     } catch (IOException e) {
       try {
         if (channel != null) {
@@ -93,6 +94,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
       }
       throw new IOException("Error in opening " + this, e);
     } finally {
+      System.out.println("NIO Byte buffer closed to " + file);
       JavaUtils.closeQuietly(channel);
     }
   }
@@ -102,6 +104,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
     FileInputStream is = null;
     try {
       is = new FileInputStream(file);
+      System.out.println("Stream opened to " + file);
       ByteStreams.skipFully(is, offset);
       return new LimitedInputStream(is, length);
     } catch (IOException e) {
@@ -135,6 +138,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
 
   @Override
   public Object convertToNetty() throws IOException {
+    System.out.println("Convert to netty invoked for " + file);
 //    FileChannel fileChannel = new FileInputStream(file).getChannel();
     return Unpooled.wrappedBuffer(nioByteBuffer());//new DefaultFileRegion(fileChannel, offset, length);
   }
